@@ -1,0 +1,38 @@
+CLAUDE.md
+.DS_Store
+just-for-docker-build-?.txt
+data-asset-diagram.*
+data-flow-diagram.*
+report.pdf
+risks.xlsx
+tags.xlsx
+risks.json
+technical-assets.json
+stats.json
+.vscode
+.task
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# build artifacts
+/vendor/
+/bin/
+/out*/
+
+# IDE stuff
+/.idea/
+/config.json
+/config.yaml
+/tmp/
+/threagile.yaml
