@@ -8,22 +8,31 @@ Este repositorio incluye el modelo de amenazas de **VOTAR** (`threagile.yaml`) y
 
 ### Analizar en local
 
+Usá el Threagile **de este repo** (traducción al español + reporte condensado). La imagen
+Docker pública `threagile/threagile` genera el PDF largo en inglés.
+
 ```shell
-mkdir -p dist
-chmod 777 dist
-docker run --rm --shm-size=256m \
-  -v "$(pwd)":/app/work \
-  threagile/threagile \
-  -model /app/work/threagile.yaml \
-  -output /app/work/dist \
-  -ignore-orphaned-risk-tracking
+go build -o bin/threagile ./cmd/threagile
+mkdir -p dist tmp
+./bin/threagile analyze-model \
+  --model threagile.yaml \
+  --output dist \
+  --app-dir . \
+  --temp-dir tmp \
+  --background report/template/background.pdf \
+  --skip-report-adoc \
+  --ignore-orphaned-risk-tracking
 ```
+
+Requisitos: Go (ver `go.mod`) y Graphviz (`dot` en el PATH).
 
 Los reportes quedan en `./dist` (`report.pdf`, diagramas PNG, JSON, Excel).
 
 ### GitHub Pages
 
-El workflow [`.github/workflows/threat-model-pages.yml`](.github/workflows/threat-model-pages.yml) corre Threagile en cada push a `master` que toque el modelo (o vía `workflow_dispatch`), genera un `index.html` en `dist/` y despliega esa carpeta a GitHub Pages.
+El workflow [`.github/workflows/threat-model-pages.yml`](.github/workflows/threat-model-pages.yml)
+compila este Threagile modificado, analiza `threagile.yaml`, genera un `index.html` en `dist/`
+y despliega esa carpeta a GitHub Pages (también vía `workflow_dispatch`).
 
 Una sola vez en el repo: **Settings → Pages → Source: GitHub Actions**.
 

@@ -6,6 +6,9 @@ on:
       - master
     paths:
       - threagile.yaml
+      - threagile-config.yaml
+      - pkg/report/**
+      - report/template/**
       - .github/workflows/threat-model-pages.yml
   workflow_dispatch:
 
@@ -25,18 +28,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Analyze threat model with Threagile
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install Graphviz and PDF tools
+        run: sudo apt-get update && sudo apt-get install -y graphviz poppler-utils
+
+      - name: Build Threagile (local Spanish/compact report)
+        run: go build -o bin/threagile ./cmd/threagile
+
+      - name: Analyze threat model
         run: |
-          mkdir -p dist
-          # Image runs as uid 1000; GHA runner owns ./dist as another uid → permission denied.
-          chmod 777 dist
-          docker run --rm --shm-size=256m \
-            -v "$PWD":/app/work \
-            threagile/threagile \
-            -model /app/work/threagile.yaml \
-            -output /app/work/dist \
-            -ignore-orphaned-risk-tracking
-          sudo chown -R "$(id -u):$(id -g)" dist
+          mkdir -p dist tmp
+          ./bin/threagile analyze-model \
+            --model threagile.yaml \
+            --output dist \
+            --app-dir . \
+            --temp-dir tmp \
+            --background report/template/background.pdf \
+            --skip-report-adoc \
+            --ignore-orphaned-risk-tracking
 
       - name: Write GitHub Pages index
         run: |
@@ -46,7 +59,7 @@ jobs:
           <head>
             <meta charset="utf-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1" />
-            <title>VOTAR – Threat Model (Threagile)</title>
+            <title>VOTAR – Modelo de Amenazas (Threagile)</title>
             <style>
               :root {
                 --bg: #f4f6f8;
@@ -143,7 +156,7 @@ jobs:
           </head>
           <body>
             <main>
-              <h1>VOTAR Threat Model</h1>
+              <h1>VOTAR – Modelo de Amenazas</h1>
               <p class="lead">
                 Modelado de amenazas generado con Threagile para la plataforma de votación
                 electrónica VOTAR (Equipo Five Stack – UTN FRVM).
@@ -158,7 +171,7 @@ jobs:
               </div>
 
               <section>
-                <h2>Data-flow diagram</h2>
+                <h2>Diagrama de flujo de datos</h2>
                 <figure>
                   <img src="data-flow-diagram.png" alt="Diagrama de flujo de datos VOTAR" />
                   <figcaption>data-flow-diagram.png</figcaption>
@@ -166,7 +179,7 @@ jobs:
               </section>
 
               <section>
-                <h2>Data-asset diagram</h2>
+                <h2>Diagrama de activos de datos</h2>
                 <figure>
                   <img src="data-asset-diagram.png" alt="Diagrama de activos de datos VOTAR" />
                   <figcaption>data-asset-diagram.png</figcaption>
@@ -176,7 +189,7 @@ jobs:
               <section>
                 <h2>Artefactos</h2>
                 <ul>
-                  <li><a href="report.pdf">report.pdf</a> — informe completo</li>
+                  <li><a href="report.pdf">report.pdf</a> — informe completo (español, versión condensada)</li>
                   <li><a href="risks.json">risks.json</a> / <a href="risks.xlsx">risks.xlsx</a></li>
                   <li><a href="technical-assets.json">technical-assets.json</a></li>
                   <li><a href="stats.json">stats.json</a> / <a href="tags.xlsx">tags.xlsx</a></li>
@@ -184,12 +197,26 @@ jobs:
               </section>
 
               <footer>
-                Generado automáticamente desde <code>threagile.yaml</code> vía GitHub Actions.
+                Generado automáticamente desde <code>threagile.yaml</code> con el Threagile
+                modificado de este repositorio (vía GitHub Actions).
               </footer>
             </main>
           </body>
           </html>
           EOF
+
+      - name: Verify condensed Spanish PDF
+        run: |
+          test -f dist/report.pdf
+          pages="$(pdfinfo dist/report.pdf | awk '/^Pages:/{print $2}')"
+          echo "PDF pages: $pages"
+          if [ "$pages" -gt 50 ]; then
+            echo "PDF too long ($pages pages); expected <= 50"
+            exit 1
+          fi
+          pdftotext dist/report.pdf - | head -20 | tee /tmp/pdf-head.txt
+          grep -q "Reporte de Modelo de Amenazas" /tmp/pdf-head.txt
+          grep -q "Resumen Ejecutivo\|Índice\|Indice" /tmp/pdf-head.txt || true
 
       - name: Setup Pages
         uses: actions/configure-pages@v6
