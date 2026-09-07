@@ -13,18 +13,18 @@ func NewMissingIdentityPropagationRule() *MissingIdentityPropagationRule {
 func (*MissingIdentityPropagationRule) Category() *types.RiskCategory {
 	return &types.RiskCategory{
 		ID:    "missing-identity-propagation",
-		Title: "Missing Identity Propagation",
-		Description: "Technical assets (especially multi-tenant systems), which usually process data for end users should " +
-			"authorize every request based on the identity of the end user when the data flow is authenticated (i.e. non-public). " +
-			"For DevOps usages at least a technical-user authorization is required.",
-		Impact: "If this risk is unmitigated, attackers might be able to access or modify foreign data after a successful compromise of a component within " +
-			"the system due to missing resource-based authorization checks.",
+		Title: "Falta de Propagación de Identidad",
+		Description: "Los activos técnicos (especialmente sistemas multi-tenant) que suelen procesar datos de " +
+			"usuarios finales deberían autorizar cada solicitud contra la identidad propagada del " +
+			"usuario final.",
+		Impact: "Si este riesgo no se mitiga, los atacantes podrían acceder o modificar datos ajenos por " +
+			"una autorización insuficiente en el backend.",
 		ASVS:       "V4 - Access Control Verification Requirements",
 		CheatSheet: "https://cheatsheetseries.owasp.org/cheatsheets/Access_Control_Cheat_Sheet.html",
-		Action:     "Identity Propagation and Resource-based Authorization",
-		Mitigation: "When processing requests for end users if possible authorize in the backend against the propagated " +
-			"identity of the end user. This can be achieved in passing JWTs or similar tokens and checking them in the backend " +
-			"services. For DevOps usages apply at least a technical-user authorization.",
+		Action:     "Propagación de Identidad y Autorización Basada en Recursos",
+		Mitigation: "Al procesar solicitudes de usuarios finales, si es posible autorice en el backend contra " +
+			"la identidad de usuario final propagada (y no solo contra una identidad técnica del " +
+			"llamador).",
 		Check:    "Are recommendations from the linked cheat sheet and referenced ASVS chapter applied?",
 		Function: types.Architecture,
 		STRIDE:   types.ElevationOfPrivilege,

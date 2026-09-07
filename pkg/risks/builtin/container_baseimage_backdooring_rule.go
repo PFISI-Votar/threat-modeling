@@ -13,18 +13,17 @@ func NewContainerBaseImageBackdooringRule() *ContainerBaseImageBackdooringRule {
 func (*ContainerBaseImageBackdooringRule) Category() *types.RiskCategory {
 	return &types.RiskCategory{
 		ID:    "container-baseimage-backdooring",
-		Title: "Container Base Image Backdooring",
-		Description: "When a technical asset is built using container technologies, Base Image Backdooring risks might arise where " +
-			"base images and other layers used contain vulnerable components or backdoors." +
-			"<br><br>See for example: <a href=\"https://techcrunch.com/2018/06/15/tainted-crypto-mining-containers-pulled-from-docker-hub/\">https://techcrunch.com/2018/06/15/tainted-crypto-mining-containers-pulled-from-docker-hub/</a>",
-		Impact:     "If this risk is unmitigated, attackers might be able to deeply persist in the target system by executing code in deployed containers.",
+		Title: "Backdooring de Imagen Base de Contenedor",
+		Description: "Cuando un activo técnico se construye con tecnologías de contenedores, pueden surgir " +
+			"riesgos de backdooring de la imagen base donde imágenes maliciosas o comprometidas " +
+			"introducen puertas traseras.",
+		Impact:     "Si este riesgo no se mitiga, los atacantes podrían persistir profundamente en el entorno " +
+			"objetivo mediante imágenes base comprometidas.",
 		ASVS:       "V10 - Malicious Code Verification Requirements",
 		CheatSheet: "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html",
-		Action:     "Container Infrastructure Hardening",
-		Mitigation: "Apply hardening of all container infrastructures (see for example the <i>CIS-Benchmarks for Docker and Kubernetes</i> and the <i>Docker Bench for Security</i>). " +
-			"Use only trusted base images of the original vendors, verify digital signatures and apply image creation best practices. " +
-			"Also consider using Google's <i>Distroless</i> base images or otherwise very small base images. " +
-			"Regularly execute container image scans with tools checking the layers for vulnerable components.",
+		Action:     "Hardening de Infraestructura de Contenedores",
+		Mitigation: "Aplique hardening a todas las infraestructuras de contenedores (véase por ejemplo los " +
+			"<i>CIS-Benchmarks para Docker y Kubernetes</i>).",
 		Check:          "Are recommendations from the linked cheat sheet and referenced ASVS/CSVS applied?",
 		Function:       types.Operations,
 		STRIDE:         types.Tampering,

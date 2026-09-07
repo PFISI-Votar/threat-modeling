@@ -1328,3 +1328,97 @@ individual_risk_categories:
 
 
 risk_tracking:
+  # VOTAR-458: 2FA TOTP en Panel Admin
+  missing-authentication-second-factor@browser-usuario>carga-panel@browser-usuario@spa-panel-admin:
+    status: mitigated
+    justification: >
+      2FA anti-phishing implementado en el Panel de Administración (TOTP / Google Authenticator):
+      setup obligatorio tras login, verificación de código de 6 dígitos y reset de setup desde perfil.
+    ticket: VOTAR-458
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  missing-authentication-second-factor@spa-bud>*@*@*:
+    status: accepted
+    justification: >
+      La BUD autentica votantes vía SSO institucional UTN. El 2FA (VOTAR-458) aplica al Panel Admin;
+      no se exige segundo factor al electorado en el flujo de sufragio.
+    ticket: VOTAR-458
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  missing-authentication-second-factor@spa-dashboard>*@*@*:
+    status: accepted
+    justification: >
+      Dashboard Público es un visor de auditoría ciudadana (mayormente lectura). El 2FA quedó
+      implementado para autoridades en el Panel Admin (VOTAR-458), no para este canal público.
+    ticket: VOTAR-458
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  missing-authentication-second-factor@browser-usuario>carga-bud@browser-usuario@spa-bud:
+    status: accepted
+    justification: >
+      Carga de la BUD desde el navegador del votante: la autenticación efectiva es SSO institucional
+      UTN dentro de la app. El 2FA aplica al Panel Admin (VOTAR-458).
+    ticket: VOTAR-458
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  # VOTAR-381: Helmet / cabeceras de seguridad en frontends
+  missing-hardening@spa-bud:
+    status: mitigated
+    justification: >
+      Hardening de interfaces web con Helmet: HSTS, CSP, X-Frame-Options, Permissions-Policy,
+      X-Content-Type-Options nosniff y Referrer-Policy (BUD y Panel).
+    ticket: VOTAR-381
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  # VOTAR-380: rate limiting + CORS en API
+  missing-hardening@api-nestjs:
+    status: mitigated
+    justification: >
+      Rate limiting diferenciado por criticidad de endpoint, CORS con whitelist de orígenes y
+      encabezados de seguridad complementarios en el API Router.
+    ticket: VOTAR-380
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  dos-risky-access-across-trust-boundary@api-nestjs@*:
+    status: mitigated
+    justification: >
+      Mitigación anti-DoS con rate limiting (HTTP 429), límites más estrictos en autenticación/voto
+      y políticas CORS restrictivas.
+    ticket: VOTAR-380
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  # XSS: CSP de Helmet reduce vector; se mantiene seguimiento parcial
+  cross-site-scripting@spa-bud:
+    status: in-progress
+    justification: >
+      CSP y cabeceras Helmet (VOTAR-381) mitigan parte del vector XSS; falta cierre formal de
+      encoding sistemático en todos los outputs del frontend.
+    ticket: VOTAR-381
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  cross-site-scripting@spa-panel-admin:
+    status: in-progress
+    justification: >
+      CSP y cabeceras Helmet (VOTAR-381) mitigan parte del vector XSS en el Panel Admin.
+    ticket: VOTAR-381
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  # CSRF: same-site / cookies HttpOnly en app; tracking
+  cross-site-request-forgery@spa-panel-admin@browser-usuario>carga-panel:
+    status: in-progress
+    justification: >
+      Sesión admin con JWT en cookies HttpOnly y 2FA (VOTAR-458); pendiente documentar tokens
+      anti-CSRF / SameSite de forma explícita en todos los formularios mutantes.
+    ticket: VOTAR-458
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+

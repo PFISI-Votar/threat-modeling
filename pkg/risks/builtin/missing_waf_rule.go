@@ -13,17 +13,17 @@ func NewMissingWafRule() *MissingWafRule {
 func (*MissingWafRule) Category() *types.RiskCategory {
 	return &types.RiskCategory{
 		ID:    "missing-waf",
-		Title: "Missing Web Application Firewall (WAF)",
-		Description: "To have a first line of filtering defense, security architectures with web-services or web-applications should include a WAF in front of them. " +
-			"Even though a WAF is not a replacement for security (all components must be secure even without a WAF) it adds another layer of defense to the overall " +
-			"system by delaying some attacks and having easier attack alerting through it.",
-		Impact:     "If this risk is unmitigated, attackers might be able to apply standard attack pattern tests at great speed without any filtering.",
+		Title: "Falta de Web Application Firewall (WAF)",
+		Description: "Para contar con una primera línea de defensa por filtrado, las arquitecturas de seguridad " +
+			"con web-services o aplicaciones web deberían incluir un Web Application Firewall (WAF).",
+		Impact:     "Si este riesgo no se mitiga, los atacantes podrían aplicar patrones de ataque estándar " +
+			"contra las aplicaciones o servicios web.",
 		ASVS:       "V1 - Architecture, Design and Threat Modeling Requirements",
 		CheatSheet: "https://cheatsheetseries.owasp.org/cheatsheets/Virtual_Patching_Cheat_Sheet.html",
 		Action:     "Web Application Firewall (WAF)",
-		Mitigation: "Consider placing a Web Application Firewall (WAF) in front of the web-services and/or web-applications. For cloud environments many cloud providers offer " +
-			"pre-configured WAFs. Even reverse proxies can be enhances by a WAF component via ModSecurity plugins.",
-		Check:          "GetAttribute a Web Application Firewall (WAF) in place?",
+		Mitigation: "Considere colocar un Web Application Firewall (WAF) delante de los web-services y/o " +
+			"aplicaciones web.",
+		Check:          "¿Hay un WAF implementado?",
 		Function:       types.Operations,
 		STRIDE:         types.Tampering,
 		DetectionLogic: "In-scope web-services and/or web-applications accessed across a network trust boundary not having a Web Application Firewall (WAF) in front of them.",

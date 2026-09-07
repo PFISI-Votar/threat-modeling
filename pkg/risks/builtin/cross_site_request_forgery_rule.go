@@ -14,16 +14,14 @@ func (*CrossSiteRequestForgeryRule) Category() *types.RiskCategory {
 	return &types.RiskCategory{
 		ID:          "cross-site-request-forgery",
 		Title:       "Cross-Site Request Forgery (CSRF)",
-		Description: "When a web application is accessed via web protocols Cross-Site Request Forgery (CSRF) risks might arise.",
-		Impact: "If this risk remains unmitigated, attackers might be able to trick logged-in victim users into unwanted actions within the web application " +
-			"by visiting an attacker controlled web site.",
+		Description: "Cuando una aplicación web se accede vía protocolos web pueden surgir riesgos de Cross-Site " +
+			"Request Forgery (CSRF).",
+		Impact: "Si este riesgo no se mitiga, los atacantes podrían engañar a víctimas autenticadas para " +
+			"ejecutar acciones no deseadas.",
 		ASVS:       "V4 - Access Control Verification Requirements",
 		CheatSheet: "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html",
-		Action:     "CSRF Prevention",
-		Mitigation: "Try to use anti-CSRF tokens ot the double-submit patterns (at least for logged-in requests). " +
-			"When your authentication scheme depends on cookies (like session or token cookies), consider marking them with " +
-			"the same-site flag. " +
-			"When a third-party product is used instead of custom developed software, check if the product applies the proper mitigation and ensure a reasonable patch-level.",
+		Action:     "Prevención de CSRF",
+		Mitigation: "Intente usar tokens anti-CSRF o el patrón double-submit (al menos para solicitudes autenticadas).",
 		Check:          "Are recommendations from the linked cheat sheet and referenced ASVS chapter applied?",
 		Function:       types.Development,
 		STRIDE:         types.Spoofing,

@@ -57,7 +57,7 @@ func (what RiskFunction) Explain() string {
 }
 
 func (what RiskFunction) Title() string {
-	return [...]string{"Business Side", "Architecture", "Development", "Operations"}[what]
+	return [...]string{"Negocio", "Arquitectura", "Desarrollo", "Operaciones"}[what]
 }
 
 func (what RiskFunction) MarshalJSON() ([]byte, error) {

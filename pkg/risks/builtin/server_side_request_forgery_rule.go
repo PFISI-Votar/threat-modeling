@@ -14,15 +14,15 @@ func (*ServerSideRequestForgeryRule) Category() *types.RiskCategory {
 	return &types.RiskCategory{
 		ID:    "server-side-request-forgery",
 		Title: "Server-Side Request Forgery (SSRF)",
-		Description: "When a server system (i.e. not a client) is accessing other server systems via typical web protocols " +
-			"Server-Side Request Forgery (SSRF) or Local-File-Inclusion (LFI) or Remote-File-Inclusion (RFI) risks might arise. ",
-		Impact:     "If this risk is unmitigated, attackers might be able to access sensitive services or files of network-reachable components by modifying outgoing calls of affected components.",
+		Description: "Cuando un sistema servidor (es decir, no un cliente) accede a otros sistemas servidor vía " +
+			"protocolos web típicos pueden surgir riesgos de Server-Side Request Forgery (SSRF).",
+		Impact:     "Si este riesgo no se mitiga, los atacantes podrían acceder a servicios o datos sensibles " +
+			"internos mediante peticiones originadas en el servidor.",
 		ASVS:       "V12 - File and Resources Verification Requirements",
 		CheatSheet: "https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html",
-		Action:     "SSRF Prevention",
-		Mitigation: "Try to avoid constructing the outgoing target URL with caller controllable values. Alternatively use a mapping (whitelist) when accessing outgoing URLs instead of creating them including caller " +
-			"controllable values. " +
-			"When a third-party product is used instead of custom developed software, check if the product applies the proper mitigation and ensure a reasonable patch-level.",
+		Action:     "Prevención de SSRF",
+		Mitigation: "Intente evitar construir la URL de destino saliente con valores controlables por el " +
+			"llamador. Alternativamente use allow-lists de destinos.",
 		Check:          "Are recommendations from the linked cheat sheet and referenced ASVS chapter applied?",
 		Function:       types.Development,
 		STRIDE:         types.InformationDisclosure,

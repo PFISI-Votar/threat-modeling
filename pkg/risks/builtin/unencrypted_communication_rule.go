@@ -15,14 +15,15 @@ func NewUnencryptedCommunicationRule() *UnencryptedCommunicationRule {
 func (*UnencryptedCommunicationRule) Category() *types.RiskCategory {
 	return &types.RiskCategory{
 		ID:    "unencrypted-communication",
-		Title: "Unencrypted Communication",
-		Description: "Due to the confidentiality and/or integrity rating of the data assets transferred over the " +
-			"communication link this connection must be encrypted.",
-		Impact:     "If this risk is unmitigated, network attackers might be able to to eavesdrop on unencrypted sensitive data sent between components.",
+		Title: "Comunicación Sin Cifrar",
+		Description: "Debido a la calificación de confidencialidad y/o integridad de los activos de datos " +
+			"transferidos por el enlace de comunicación, esta conexión debe cifrarse.",
+		Impact:     "Si este riesgo no se mitiga, atacantes de red podrían interceptar o manipular los datos en " +
+			"tránsito.",
 		ASVS:       "V9 - Communication Verification Requirements",
 		CheatSheet: "https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Protection_Cheat_Sheet.html",
-		Action:     "Encryption of Communication Links",
-		Mitigation: "Apply transport layer encryption to the communication link.",
+		Action:     "Cifrado de Enlaces de Comunicación",
+		Mitigation: "Aplique cifrado de capa de transporte al enlace de comunicación.",
 		Check:      "Are recommendations from the linked cheat sheet and referenced ASVS chapter applied?",
 		Function:   types.Operations,
 		STRIDE:     types.InformationDisclosure,

@@ -15,23 +15,27 @@ func NewMissingAuthenticationSecondFactorRule(missingAuthenticationRule *Missing
 func (*MissingAuthenticationSecondFactorRule) Category() *types.RiskCategory {
 	return &types.RiskCategory{
 		ID:    "missing-authentication-second-factor",
-		Title: "Missing Two-Factor Authentication (2FA)",
-		Description: "Technical assets (especially multi-tenant systems) should authenticate incoming requests with " +
-			"two-factor (2FA) authentication when the asset processes or stores highly sensitive data (in terms of confidentiality, integrity, and availability) and is accessed by humans.",
-		Impact:     "If this risk is unmitigated, attackers might be able to access or modify highly sensitive data without strong authentication.",
+		Title: "Falta de Autenticación de Dos Factores (2FA)",
+		Description: "Los activos técnicos (especialmente sistemas multi-tenant) deberían autenticar las " +
+			"solicitudes entrantes con autenticación de dos factores (2FA) cuando el activo procesa o " +
+			"almacena datos altamente sensibles (en términos de confidencialidad, integridad y " +
+			"disponibilidad) y es accedido por personas.",
+		Impact:     "Si este riesgo no se mitiga, los atacantes podrían acceder o modificar datos altamente " +
+			"sensibles sin una autenticación fuerte.",
 		ASVS:       "V2 - Authentication Verification Requirements",
 		CheatSheet: "https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html",
-		Action:     "Authentication with Second Factor (2FA)",
-		Mitigation: "Apply an authentication method to the technical asset protecting highly sensitive data via " +
-			"two-factor authentication for human users.",
-		Check:    "Are recommendations from the linked cheat sheet and referenced ASVS chapter applied?",
+		Action:     "Autenticación con Segundo Factor (2FA)",
+		Mitigation: "Aplique un método de autenticación al activo técnico que protege datos altamente sensibles " +
+			"mediante autenticación de dos factores para usuarios humanos.",
+		Check:    "¿Se aplican las recomendaciones de la hoja de referencia y del capítulo ASVS enlazado?",
 		Function: types.BusinessSide,
 		STRIDE:   types.ElevationOfPrivilege,
 		DetectionLogic: "In-scope technical assets (except " + types.LoadBalancer + ", " + types.ReverseProxy + ", " + types.WAF + ", " + types.IDS + ", and " + types.IPS + ") should authenticate incoming requests via two-factor authentication (2FA) " +
 			"when the asset processes or stores highly sensitive data (in terms of confidentiality, integrity, and availability) and is accessed by a client used by a human user.",
 		RiskAssessment: types.MediumSeverity.String(),
-		FalsePositives: "Technical assets which do not process requests regarding functionality or data linked to end-users (customers) " +
-			"can be considered as false positives after individual review.",
+		FalsePositives: "Activos técnicos que no procesan solicitudes relacionadas con funcionalidad o datos " +
+			"vinculados a usuarios finales pueden considerarse falsos positivos tras una revisión " +
+			"individual.",
 		ModelFailurePossibleReason: false,
 		CWE:                        308,
 	}

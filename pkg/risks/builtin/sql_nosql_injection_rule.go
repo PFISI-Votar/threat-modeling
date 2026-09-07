@@ -13,15 +13,17 @@ func NewSqlNoSqlInjectionRule() *SqlNoSqlInjectionRule {
 func (*SqlNoSqlInjectionRule) Category() *types.RiskCategory {
 	return &types.RiskCategory{
 		ID:    "sql-nosql-injection",
-		Title: "SQL/NoSQL-Injection",
-		Description: "When a database is accessed via database access protocols SQL/NoSQL-Injection risks might arise. " +
-			"The risk rating depends on the sensitivity technical asset itself and of the data assets processed.",
-		Impact:     "If this risk is unmitigated, attackers might be able to modify SQL/NoSQL queries to steal and modify data and eventually further escalate towards a deeper system penetration via code executions.",
+		Title: "Inyección SQL/NoSQL",
+		Description: "Cuando se accede a una base de datos mediante protocolos de acceso a base de datos pueden " +
+			"surgir riesgos de inyección SQL/NoSQL. La calificación depende de la sensibilidad de los " +
+			"datos en el almacén.",
+		Impact:     "Si este riesgo no se mitiga, los atacantes podrían modificar consultas SQL/NoSQL y acceder " +
+			"o alterar datos.",
 		ASVS:       "V5 - Validation, Sanitization and Encoding Verification Requirements",
 		CheatSheet: "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html",
-		Action:     "SQL/NoSQL-Injection Prevention",
-		Mitigation: "Try to use parameter binding to be safe from injection vulnerabilities. " +
-			"When a third-party product is used instead of custom developed software, check if the product applies the proper mitigation and ensure a reasonable patch-level.",
+		Action:     "Prevención de Inyección SQL/NoSQL",
+		Mitigation: "Intente usar parameter binding para evitar vulnerabilidades de inyección. Cuando se usa un " +
+			"producto de terceros, verifique que no sea vulnerable a inyección.",
 		Check:          "Are recommendations from the linked cheat sheet and referenced ASVS chapter applied?",
 		Function:       types.Development,
 		STRIDE:         types.Tampering,

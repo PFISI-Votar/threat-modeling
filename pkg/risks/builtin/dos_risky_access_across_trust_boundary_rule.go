@@ -13,16 +13,15 @@ func NewDosRiskyAccessAcrossTrustBoundaryRule() *DosRiskyAccessAcrossTrustBounda
 func (*DosRiskyAccessAcrossTrustBoundaryRule) Category() *types.RiskCategory {
 	return &types.RiskCategory{
 		ID:    "dos-risky-access-across-trust-boundary",
-		Title: "DoS-risky Access Across Trust-Boundary",
-		Description: "Assets accessed across trust boundaries with critical or mission-critical availability rating " +
-			"are more prone to Denial-of-Service (DoS) risks.",
-		Impact:     "If this risk remains unmitigated, attackers might be able to disturb the availability of important parts of the system.",
+		Title: "Acceso con Riesgo de DoS a Través de Límite de Confianza",
+		Description: "Los activos accedidos a través de límites de confianza con calificación de disponibilidad " +
+			"crítica o mission-critical son más propensos a ataques de denegación de servicio (DoS).",
+		Impact:     "Si este riesgo no se mitiga, los atacantes podrían afectar la disponibilidad de servicios críticos.",
 		ASVS:       "V1 - Architecture, Design and Threat Modeling Requirements",
 		CheatSheet: "https://cheatsheetseries.owasp.org/cheatsheets/Denial_of_Service_Cheat_Sheet.html",
-		Action:     "Anti-DoS Measures",
-		Mitigation: "Apply anti-DoS techniques like throttling and/or per-client load blocking with quotas. " +
-			"Also for maintenance access routes consider applying a VPN instead of public reachable interfaces. " +
-			"Generally applying redundancy on the targeted technical asset reduces the risk of DoS.",
+		Action:     "Medidas Anti-DoS",
+		Mitigation: "Aplique técnicas anti-DoS como throttling y/o bloqueo de carga por cliente con cuotas. " +
+			"También para mantenimiento administrativo use VPN o filtrado por IP.",
 		Check:    "Are recommendations from the linked cheat sheet and referenced ASVS chapter applied?",
 		Function: types.Operations,
 		STRIDE:   types.DenialOfService,
@@ -100,15 +99,15 @@ func (r *DosRiskyAccessAcrossTrustBoundaryRule) createRisk(techAsset *types.Tech
 		impact = types.MediumImpact
 	}
 	if len(hopBetween) > 0 {
-		hopBetween = " forwarded via <b>" + hopBetween + "</b>"
+		hopBetween = " reenviado vía <b>" + hopBetween + "</b>"
 	}
 	risk := &types.Risk{
 		CategoryId:             r.Category().ID,
 		Severity:               types.CalculateSeverity(types.Unlikely, impact),
 		ExploitationLikelihood: types.Unlikely,
 		ExploitationImpact:     impact,
-		Title: "<b>Denial-of-Service</b> risky access of <b>" + techAsset.Title + "</b> by <b>" + clientOutsideTrustBoundary.Title +
-			"</b> via <b>" + dataFlow.Title + "</b>" + hopBetween,
+		Title: "<b>Denegación de Servicio</b> por acceso riesgoso a <b>" + techAsset.Title + "</b> desde <b>" + clientOutsideTrustBoundary.Title +
+			"</b> vía <b>" + dataFlow.Title + "</b>" + hopBetween,
 		MostRelevantTechnicalAssetId:    techAsset.Id,
 		MostRelevantCommunicationLinkId: dataFlow.Id,
 		DataBreachProbability:           types.Improbable,

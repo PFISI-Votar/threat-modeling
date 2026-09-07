@@ -16,22 +16,16 @@ func NewMissingCloudHardeningRule() *MissingCloudHardeningRule {
 func (*MissingCloudHardeningRule) Category() *types.RiskCategory {
 	return &types.RiskCategory{
 		ID:    "missing-cloud-hardening",
-		Title: "Missing Cloud Hardening",
-		Description: "Cloud components should be hardened according to the cloud vendor best practices. This affects their " +
-			"configuration, auditing, and further areas.",
-		Impact:     "If this risk is unmitigated, attackers might access cloud components in an unintended way.",
+		Title: "Falta de Hardening en la Nube",
+		Description: "Los componentes en la nube deberían endurecerse según las mejores prácticas del proveedor. " +
+			"Esto afecta su configuración, auditoría, gestión de identidades y redes.",
+		Impact:     "Si este riesgo no se mitiga, los atacantes podrían acceder a componentes en la nube de " +
+			"forma no intencionada o indebida.",
 		ASVS:       "V1 - Architecture, Design and Threat Modeling Requirements",
 		CheatSheet: "https://cheatsheetseries.owasp.org/cheatsheets/Attack_Surface_Analysis_Cheat_Sheet.html",
-		Action:     "Cloud Hardening",
-		Mitigation: "Apply hardening of all cloud components and services, taking special care to follow the individual risk descriptions (which " +
-			"depend on the cloud provider tags in the model). " +
-			"<br><br>For <b>Amazon Web Services (AWS)</b>: Follow the <i>CIS Benchmark for Amazon Web Services</i> (see also the automated checks of cloud audit tools like <i>\"PacBot\", \"CloudSploit\", \"CloudMapper\", \"ScoutSuite\", or \"Prowler AWS CIS Benchmark Tool\"</i>). " +
-			"<br>For EC2 and other servers running Amazon Linux, follow the <i>CIS Benchmark for Amazon Linux</i> and switch to IMDSv2. " +
-			"<br>For S3 buckets follow the <i>Security Best Practices for Amazon S3</i> at <a href=\"https://docs.aws.amazon.com/AmazonS3/latest/dev/security-best-practices.html\">https://docs.aws.amazon.com/AmazonS3/latest/dev/security-best-practices.html</a> to avoid accidental leakage. " +
-			"<br>Also take a look at some of these tools: <a href=\"https://github.com/toniblyx/my-arsenal-of-aws-security-tools\">https://github.com/toniblyx/my-arsenal-of-aws-security-tools</a> " +
-			"<br><br>For <b>Microsoft Azure</b>: Follow the <i>CIS Benchmark for Microsoft Azure</i> (see also the automated checks of cloud audit tools like <i>\"CloudSploit\" or \"ScoutSuite\"</i>)." +
-			"<br><br>For <b>Google Cloud Platform</b>: Follow the <i>CIS Benchmark for Google Cloud Computing Platform</i> (see also the automated checks of cloud audit tools like <i>\"CloudSploit\" or \"ScoutSuite\"</i>). " +
-			"<br><br>For <b>Oracle Cloud Platform</b>: Follow the hardening best practices (see also the automated checks of cloud audit tools like <i>\"CloudSploit\"</i>).",
+		Action:     "Hardening en la Nube",
+		Mitigation: "Aplique hardening a todos los componentes y servicios en la nube, siguiendo las " +
+			"recomendaciones individuales del proveedor de nube usado.",
 		Check:          "Are recommendations from the linked cheat sheet and referenced ASVS chapter applied?",
 		Function:       types.Operations,
 		STRIDE:         types.Tampering,

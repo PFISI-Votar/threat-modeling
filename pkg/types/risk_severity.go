@@ -54,7 +54,7 @@ func (what RiskSeverity) Explain() string {
 }
 
 func (what RiskSeverity) Title() string {
-	return [...]string{"Low", "Medium", "Elevated", "High", "Critical"}[what]
+	return [...]string{"Bajo", "Medio", "Elevado", "Alto", "Crítico"}[what]
 }
 
 func (what RiskSeverity) Find(value string) (RiskSeverity, error) {

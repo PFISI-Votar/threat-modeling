@@ -13,15 +13,15 @@ func NewUnnecessaryTechnicalAssetRule() *UnnecessaryTechnicalAssetRule {
 func (*UnnecessaryTechnicalAssetRule) Category() *types.RiskCategory {
 	return &types.RiskCategory{
 		ID:    "unnecessary-technical-asset",
-		Title: "Unnecessary Technical Asset",
-		Description: "When a technical asset does not process any data assets, this is " +
-			"an indicator for an unnecessary technical asset (or for an incomplete model). " +
-			"This is also the case if the asset has no communication links (either outgoing or incoming).",
-		Impact:                     "If this risk is unmitigated, attackers might be able to target unnecessary technical assets.",
+		Title: "Activo Técnico Innecesario",
+		Description: "Cuando un activo técnico no procesa ningún activo de datos, es un indicador de un activo " +
+			"técnico innecesario (o de un modelo incompleto).",
+		Impact:                     "Si este riesgo no se mitiga, los atacantes podrían apuntar a activos técnicos innecesarios " +
+			"aumentando la superficie de ataque.",
 		ASVS:                       "V1 - Architecture, Design and Threat Modeling Requirements",
 		CheatSheet:                 "https://cheatsheetseries.owasp.org/cheatsheets/Attack_Surface_Analysis_Cheat_Sheet.html",
-		Action:                     "Attack Surface Reduction",
-		Mitigation:                 "Try to avoid using technical assets that do not process or store anything.",
+		Action:                     "Reducción de Superficie de Ataque",
+		Mitigation:                 "Intente evitar usar activos técnicos que no procesen ni almacenen nada.",
 		Check:                      "Are recommendations from the linked cheat sheet and referenced ASVS chapter applied?",
 		Function:                   types.Architecture,
 		STRIDE:                     types.ElevationOfPrivilege,

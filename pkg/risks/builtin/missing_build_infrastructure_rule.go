@@ -13,17 +13,16 @@ func NewMissingBuildInfrastructureRule() *MissingBuildInfrastructureRule {
 func (*MissingBuildInfrastructureRule) Category() *types.RiskCategory {
 	return &types.RiskCategory{
 		ID:    "missing-build-infrastructure",
-		Title: "Missing Build Infrastructure",
-		Description: "The modeled architecture does not contain a build infrastructure (devops-client, sourcecode-repo, build-pipeline, etc.), " +
-			"which might be the risk of a model missing critical assets (and thus not seeing their risks). " +
-			"If the architecture contains custom-developed parts, the pipeline where code gets developed " +
-			"and built needs to be part of the model.",
-		Impact: "If this risk is unmitigated, attackers might be able to exploit risks unseen in this threat model due to " +
-			"critical build infrastructure components missing in the model.",
+		Title: "Falta de Infraestructura de Build",
+		Description: "La arquitectura modelada no contiene una infraestructura de build (cliente DevOps, " +
+			"repositorio de código, pipeline de build, etc.), lo que puede ocultar riesgos de la cadena " +
+			"de suministro.",
+		Impact: "Si este riesgo no se mitiga, los atacantes podrían explotar riesgos no visibles en el " +
+			"modelo de amenazas relacionado con la cadena de suministro de software.",
 		ASVS:       "V1 - Architecture, Design and Threat Modeling Requirements",
 		CheatSheet: "https://cheatsheetseries.owasp.org/cheatsheets/Attack_Surface_Analysis_Cheat_Sheet.html",
-		Action:     "Build Pipeline Hardening",
-		Mitigation: "Include the build infrastructure in the model.",
+		Action:     "Hardening del Pipeline de Build",
+		Mitigation: "Incluya la infraestructura de build en el modelo.",
 		Check:      "Are recommendations from the linked cheat sheet and referenced ASVS chapter applied?",
 		Function:   types.Architecture,
 		STRIDE:     types.Tampering,

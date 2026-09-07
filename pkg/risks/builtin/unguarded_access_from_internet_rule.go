@@ -15,17 +15,16 @@ func NewUnguardedAccessFromInternetRule() *UnguardedAccessFromInternetRule {
 func (*UnguardedAccessFromInternetRule) Category() *types.RiskCategory {
 	return &types.RiskCategory{
 		ID:    "unguarded-access-from-internet",
-		Title: "Unguarded Access From Internet",
-		Description: "Internet-exposed assets must be guarded by a protecting service, application, " +
-			"or reverse-proxy.",
-		Impact: "If this risk is unmitigated, attackers might be able to directly attack sensitive systems without any hardening components in-between " +
-			"due to them being directly exposed on the internet.",
+		Title: "Acceso Sin Protección Desde Internet",
+		Description: "Los activos expuestos a Internet deben estar protegidos por un servicio, aplicación o " +
+			"reverse-proxy de guarda.",
+		Impact: "Si este riesgo no se mitiga, los atacantes podrían atacar directamente activos sensibles " +
+			"desde Internet.",
 		ASVS:       "V1 - Architecture, Design and Threat Modeling Requirements",
 		CheatSheet: "https://cheatsheetseries.owasp.org/cheatsheets/Attack_Surface_Analysis_Cheat_Sheet.html",
-		Action:     "Encapsulation of Technical Asset",
-		Mitigation: "Encapsulate the asset behind a guarding service, application, or reverse-proxy. " +
-			"For admin maintenance a bastion-host should be used as a jump-server. " +
-			"For file transfer a store-and-forward-host should be used as an indirect file exchange platform.",
+		Action:     "Encapsulación del Activo Técnico",
+		Mitigation: "Encapsule el activo detrás de un servicio, aplicación o reverse-proxy de guarda. Para " +
+			"mantenimiento administrativo use VPN o acceso filtrado por IP.",
 		Check:    "Are recommendations from the linked cheat sheet and referenced ASVS chapter applied?",
 		Function: types.Architecture,
 		STRIDE:   types.ElevationOfPrivilege,

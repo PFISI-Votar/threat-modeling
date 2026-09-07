@@ -13,13 +13,15 @@ func NewUnguardedDirectDatastoreAccessRule() *UnguardedDirectDatastoreAccessRule
 func (*UnguardedDirectDatastoreAccessRule) Category() *types.RiskCategory {
 	return &types.RiskCategory{
 		ID:          "unguarded-direct-datastore-access",
-		Title:       "Unguarded Direct Datastore Access",
-		Description: "Data stores accessed across trust boundaries must be guarded by some protecting service or application.",
-		Impact:      "If this risk is unmitigated, attackers might be able to directly attack sensitive data stores without any protecting components in-between.",
+		Title:       "Acceso Directo Sin Protección al Almacén de Datos",
+		Description: "Los almacenes de datos accedidos a través de límites de confianza deben estar protegidos " +
+			"por algún servicio o aplicación de guarda.",
+		Impact:      "Si este riesgo no se mitiga, los atacantes podrían atacar directamente almacenes de datos " +
+			"sensibles.",
 		ASVS:        "V1 - Architecture, Design and Threat Modeling Requirements",
 		CheatSheet:  "https://cheatsheetseries.owasp.org/cheatsheets/Attack_Surface_Analysis_Cheat_Sheet.html",
-		Action:      "Encapsulation of Datastore",
-		Mitigation:  "Encapsulate the datastore access behind a guarding service or application.",
+		Action:      "Encapsulación del Almacén de Datos",
+		Mitigation:  "Encapsule el acceso al almacén de datos detrás de un servicio o aplicación de guarda.",
 		Check:       "Are recommendations from the linked cheat sheet and referenced ASVS chapter applied?",
 		Function:    types.Architecture,
 		STRIDE:      types.ElevationOfPrivilege,

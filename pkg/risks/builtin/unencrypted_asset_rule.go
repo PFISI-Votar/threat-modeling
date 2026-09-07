@@ -13,14 +13,14 @@ func NewUnencryptedAssetRule() *UnencryptedAssetRule {
 func (*UnencryptedAssetRule) Category() *types.RiskCategory {
 	return &types.RiskCategory{
 		ID:    "unencrypted-asset",
-		Title: "Unencrypted Technical Assets",
-		Description: "Due to the confidentiality rating of the technical asset itself and/or the stored data assets " +
-			"this technical asset must be encrypted. The risk rating depends on the sensitivity technical asset itself and of the data assets stored.",
-		Impact:     "If this risk is unmitigated, attackers might be able to access unencrypted data when successfully compromising sensitive components.",
+		Title: "Activos Técnicos Sin Cifrar",
+		Description: "Debido a la calificación de confidencialidad del activo técnico y/o de los activos de " +
+			"datos almacenados, este activo técnico debe cifrarse.",
+		Impact:     "Si este riesgo no se mitiga, los atacantes podrían acceder a datos sin cifrar en el activo técnico.",
 		ASVS:       "V6 - Stored Cryptography Verification Requirements",
 		CheatSheet: "https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html",
-		Action:     "Encryption of Technical Asset",
-		Mitigation: "Apply encryption to the technical asset.",
+		Action:     "Cifrado del Activo Técnico",
+		Mitigation: "Aplique cifrado al activo técnico.",
 		Check:      "Are recommendations from the linked cheat sheet and referenced ASVS chapter applied?",
 		Function:   types.Operations,
 		STRIDE:     types.InformationDisclosure,

@@ -13,15 +13,17 @@ func NewMissingAuthenticationRule() *MissingAuthenticationRule {
 func (*MissingAuthenticationRule) Category() *types.RiskCategory {
 	return &types.RiskCategory{
 		ID:          "missing-authentication",
-		Title:       "Missing Authentication",
-		Description: "Technical assets (especially multi-tenant systems) should authenticate incoming requests when the asset processes sensitive data. ",
-		Impact:      "If this risk is unmitigated, attackers might be able to access or modify sensitive data in an unauthenticated way.",
+		Title:       "Falta de Autenticación",
+		Description: "Los activos técnicos (especialmente sistemas multi-tenant) deberían autenticar las " +
+			"solicitudes entrantes cuando el activo procesa datos sensibles.",
+		Impact:      "Si este riesgo no se mitiga, los atacantes podrían acceder o modificar datos sensibles sin " +
+			"autenticación.",
 		ASVS:        "V2 - Authentication Verification Requirements",
 		CheatSheet:  "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
-		Action:      "Authentication of Incoming Requests",
-		Mitigation: "Apply an authentication method to the technical asset. To protect highly sensitive data consider " +
-			"the use of two-factor authentication for human users.",
-		Check:    "Are recommendations from the linked cheat sheet and referenced ASVS chapter applied?",
+		Action:      "Autenticación de Solicitudes Entrantes",
+		Mitigation: "Aplique un método de autenticación al activo técnico. Para proteger datos altamente " +
+			"sensibles considere el uso de autenticación de dos factores para usuarios humanos.",
+		Check:    "¿Se aplican las recomendaciones de la hoja de referencia y del capítulo ASVS enlazado?",
 		Function: types.Architecture,
 		STRIDE:   types.ElevationOfPrivilege,
 		DetectionLogic: "In-scope technical assets (except " + types.LoadBalancer + ", " + types.ReverseProxy + ", " + types.ServiceRegistry + ", " + types.WAF + ", " + types.IDS + ", and " + types.IPS + " and in-process calls) should authenticate incoming requests when the asset processes " +
@@ -84,19 +86,19 @@ func (r *MissingAuthenticationRule) createRisk(input *types.Model, technicalAsse
 	impact types.RiskExploitationImpact, likelihood types.RiskExploitationLikelihood, twoFactor bool, category *types.RiskCategory) *types.Risk {
 	factorString := ""
 	if twoFactor {
-		factorString = "Two-Factor "
+		factorString = "de Dos Factores "
 	}
 	if len(hopBetween) > 0 {
-		hopBetween = "forwarded via <b>" + hopBetween + "</b> "
+		hopBetween = "reenviado vía <b>" + hopBetween + "</b> "
 	}
 	risk := &types.Risk{
 		CategoryId:             category.ID,
 		Severity:               types.CalculateSeverity(likelihood, impact),
 		ExploitationLikelihood: likelihood,
 		ExploitationImpact:     impact,
-		Title: "<b>Missing " + factorString + "Authentication</b> covering communication link <b>" + incomingAccess.Title + "</b> " +
-			"from <b>" + input.TechnicalAssets[incomingAccessOrigin.SourceId].Title + "</b> " + hopBetween +
-			"to <b>" + technicalAsset.Title + "</b>",
+		Title: "<b>Falta de Autenticación " + factorString + "</b> en el enlace de comunicación <b>" + incomingAccess.Title + "</b> " +
+			"desde <b>" + input.TechnicalAssets[incomingAccessOrigin.SourceId].Title + "</b> " + hopBetween +
+			"hacia <b>" + technicalAsset.Title + "</b>",
 		MostRelevantTechnicalAssetId:    technicalAsset.Id,
 		MostRelevantCommunicationLinkId: incomingAccess.Id,
 		DataBreachProbability:           types.Possible,

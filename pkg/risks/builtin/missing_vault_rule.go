@@ -13,24 +13,29 @@ func NewMissingVaultRule() *MissingVaultRule {
 func (*MissingVaultRule) Category() *types.RiskCategory {
 	return &types.RiskCategory{
 		ID:    "missing-vault",
-		Title: "Missing Vault (Secret Storage)",
-		Description: "In order to avoid the risk of secret leakage via config files (when attacked through vulnerabilities being able to " +
-			"read files like Path-Traversal and others), it is best practice to use a separate hardened process with proper authentication, " +
-			"authorization, and audit logging to access config secrets (like credentials, private keys, client certificates, etc.). " +
-			"This component is usually some kind of Vault.",
-		Impact: "If this risk is unmitigated, attackers might be able to easier steal config secrets (like credentials, private keys, client certificates, etc.) once " +
-			"a vulnerability to access files is present and exploited.",
+		Title: "Falta de Vault (Almacenamiento de Secretos)",
+		Description: "Para evitar la fuga de secretos vía archivos de configuración (cuando se explotan " +
+			"vulnerabilidades que permiten leer archivos, como Path-Traversal u otras), es buena " +
+			"práctica usar un proceso separado y endurecido, con autenticación, autorización y registro " +
+			"de auditoría adecuados, para acceder a secretos de configuración (credenciales, claves " +
+			"privadas, certificados de cliente, etc.). Este componente suele ser algún tipo de Vault.",
+		Impact: "Si este riesgo no se mitiga, los atacantes podrían robar con mayor facilidad secretos de " +
+			"configuración (credenciales, claves privadas, certificados de cliente, etc.) una vez que " +
+			"exista y se explote una vulnerabilidad de acceso a archivos.",
 		ASVS:           "V6 - Stored Cryptography Verification Requirements",
 		CheatSheet:     "https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html",
-		Action:         "Vault (Secret Storage)",
-		Mitigation:     "Consider using a Vault (Secret Storage) to securely store and access config secrets (like credentials, private keys, client certificates, etc.).",
-		Check:          "GetAttribute a Vault (Secret Storage) in place?",
+		Action:         "Vault (Almacenamiento de Secretos)",
+		Mitigation:     "Considere usar un Vault (Almacenamiento de Secretos) para guardar y acceder de forma " +
+			"segura a secretos de configuración (credenciales, claves privadas, certificados de " +
+			"cliente, etc.).",
+		Check:          "¿Hay un Vault (Almacenamiento de Secretos) implementado?",
 		Function:       types.Architecture,
 		STRIDE:         types.InformationDisclosure,
-		DetectionLogic: "Models without a Vault (Secret Storage).",
-		RiskAssessment: "The risk rating depends on the sensitivity of the technical asset itself and of the data assets processed.",
-		FalsePositives: "Models where no technical assets have any kind of sensitive config data to protect " +
-			"can be considered as false positives after individual review.",
+		DetectionLogic: "Modelos sin un Vault (Almacenamiento de Secretos).",
+		RiskAssessment: "La calificación del riesgo depende de la sensibilidad del activo técnico y de los activos " +
+			"de datos procesados.",
+		FalsePositives: "Modelos donde ningún activo técnico tiene datos de configuración sensibles que proteger " +
+			"pueden considerarse falsos positivos tras una revisión individual.",
 		ModelFailurePossibleReason: true,
 		CWE:                        522,
 	}
@@ -73,10 +78,10 @@ func (r *MissingVaultRule) GenerateRisks(input *types.Model) ([]*types.Risk, err
 }
 
 func (r *MissingVaultRule) createRisk(technicalAsset *types.TechnicalAsset, impact types.RiskExploitationImpact) *types.Risk {
-	title := "<b>Missing Vault (Secret Storage)</b> in the threat model"
+	title := "<b>Falta de Vault (Almacenamiento de Secretos)</b> en el modelo de amenazas"
 	id := "no-components"
 	if technicalAsset != nil {
-		title += " (referencing asset <b>" + technicalAsset.Title + "</b> as an example)"
+		title += " (referenciando el activo <b>" + technicalAsset.Title + "</b> como ejemplo)"
 		id = technicalAsset.Id
 	}
 	risk := &types.Risk{
