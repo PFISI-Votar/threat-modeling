@@ -1328,12 +1328,95 @@ individual_risk_categories:
 
 
 risk_tracking:
-  # VOTAR-458: 2FA TOTP en Panel Admin
+  # --- SQL Injection: TypeORM + parámetros nombrados (back) ---
+  sql-nosql-injection@api-nestjs@db-postgresql@api-nestjs>api-a-postgresql:
+    status: mitigated
+    justification: >
+      Backend NestJS usa TypeORM Repository/QueryBuilder con parámetros nombrados
+      (:idEleccion, etc.). El SQL crudo queda limitado a migraciones DDL estáticas.
+      Evidencia: back/src (createQueryBuilder + TypeOrmModule).
+    ticket: code-review-back
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  # --- XSS: React escaping + CSP nginx/Vite (front) + Helmet API (back) ---
+  cross-site-scripting@spa-bud:
+    status: mitigated
+    justification: >
+      SPA React sin dangerouslySetInnerHTML; CSP production (script-src 'self') vía
+      security-headers.ts + nginx (VOTAR-381). Residual: style-src 'unsafe-inline'.
+    ticket: VOTAR-381
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  cross-site-scripting@spa-panel-admin:
+    status: mitigated
+    justification: >
+      Misma SPA y mismas cabeceras CSP/XFO/nosniff que BUD (deploy nginx + Vite headers).
+    ticket: VOTAR-381
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  # --- CSRF: SameSite=Lax + cookies HttpOnly + CORS whitelist ---
+  cross-site-request-forgery@spa-bud@browser-usuario>carga-bud:
+    status: accepted
+    justification: >
+      Cookies de sesión HttpOnly con sameSite=lax (back/src/auth/utils/auth-cookie.util.ts)
+      y CORS con whitelist. No hay token CSRF dedicado; riesgo residual aceptado para
+      el alcance académico/testnet.
+    ticket: VOTAR-380
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  cross-site-request-forgery@spa-panel-admin@browser-usuario>carga-panel:
+    status: accepted
+    justification: >
+      Igual que BUD: SameSite=Lax + CORS + 2FA admin (VOTAR-458) reduce impacto de CSRF
+      sobre mutaciones administrativas.
+    ticket: VOTAR-458
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  # --- Autenticación ---
+  missing-authentication@spa-bud>bud-reveal-anonimo@spa-bud@api-nestjs:
+    status: accepted
+    justification: >
+      Reveal anónimo (FASE 2) es intencional: EntidadFirmasPublicController sin JWT
+      para desvinculación identidad↔voto (VOTAR-377/379). Rate limit aplicado.
+    ticket: VOTAR-377
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  missing-authentication@spa-dashboard>dashboard-a-api@spa-dashboard@api-nestjs:
+    status: accepted
+    justification: >
+      Dashboard Público: endpoints de lectura ciudadana sin autenticación por diseño
+      (participacion-public, escrutinio-public).
+    ticket: VOTAR-367
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  missing-authentication@browser-usuario>carga-bud@browser-usuario@spa-bud:
+    status: accepted
+    justification: >
+      Carga estática de la SPA; la autenticación real es SSO votante vía BFF tras cargar la BUD.
+    ticket: code-review-front
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  missing-authentication@browser-usuario>carga-panel@browser-usuario@spa-panel-admin:
+    status: accepted
+    justification: >
+      Carga estática del Panel; autenticación nick/password + 2FA TOTP antes de cookies de sesión.
+    ticket: VOTAR-458
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  # --- 2FA (VOTAR-458) ---
   missing-authentication-second-factor@browser-usuario>carga-panel@browser-usuario@spa-panel-admin:
     status: mitigated
     justification: >
-      2FA anti-phishing implementado en el Panel de Administración (TOTP / Google Authenticator):
-      setup obligatorio tras login, verificación de código de 6 dígitos y reset de setup desde perfil.
+      2FA TOTP obligatorio en Panel Admin (TotpService + /auth/2fa/* + UI admin-two-factor-form).
     ticket: VOTAR-458
     date: 2026-09-07
     checked_by: Equipo Five Stack
@@ -1341,8 +1424,7 @@ risk_tracking:
   missing-authentication-second-factor@spa-bud>*@*@*:
     status: accepted
     justification: >
-      La BUD autentica votantes vía SSO institucional UTN. El 2FA (VOTAR-458) aplica al Panel Admin;
-      no se exige segundo factor al electorado en el flujo de sufragio.
+      BUD usa SSO institucional UTN; 2FA aplica al Panel Admin, no al electorado.
     ticket: VOTAR-458
     date: 2026-09-07
     checked_by: Equipo Five Stack
@@ -1350,8 +1432,7 @@ risk_tracking:
   missing-authentication-second-factor@spa-dashboard>*@*@*:
     status: accepted
     justification: >
-      Dashboard Público es un visor de auditoría ciudadana (mayormente lectura). El 2FA quedó
-      implementado para autoridades en el Panel Admin (VOTAR-458), no para este canal público.
+      Canal público de auditoría; sin 2FA por diseño.
     ticket: VOTAR-458
     date: 2026-09-07
     checked_by: Equipo Five Stack
@@ -1359,66 +1440,222 @@ risk_tracking:
   missing-authentication-second-factor@browser-usuario>carga-bud@browser-usuario@spa-bud:
     status: accepted
     justification: >
-      Carga de la BUD desde el navegador del votante: la autenticación efectiva es SSO institucional
-      UTN dentro de la app. El 2FA aplica al Panel Admin (VOTAR-458).
+      Carga BUD + SSO votante; 2FA no aplica al flujo electoral ciudadano.
     ticket: VOTAR-458
     date: 2026-09-07
     checked_by: Equipo Five Stack
 
-  # VOTAR-381: Helmet / cabeceras de seguridad en frontends
+  # --- Propagación de identidad ---
+  missing-identity-propagation@spa-bud>bud-a-api@spa-bud@api-nestjs:
+    status: mitigated
+    justification: >
+      VoterJwtAuthGuard + RolesGuard + VoterElectionGuard; autorización con votanteHash/sub del JWT.
+    ticket: code-review-back
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  missing-identity-propagation@spa-panel-admin>panel-a-api@spa-panel-admin@api-nestjs:
+    status: mitigated
+    justification: >
+      @AdminAuth (JwtAuthGuard + RolesGuard ELECTION_ADMIN); mutaciones ligadas a user.sub.
+    ticket: code-review-back
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  # --- Hardening ---
   missing-hardening@spa-bud:
     status: mitigated
     justification: >
-      Hardening de interfaces web con Helmet: HSTS, CSP, X-Frame-Options, Permissions-Policy,
-      X-Content-Type-Options nosniff y Referrer-Policy (BUD y Panel).
+      Cabeceras CSP/HSTS/XFO/Permissions-Policy en Vite+nginx (front) y Helmet en API (VOTAR-381).
     ticket: VOTAR-381
     date: 2026-09-07
     checked_by: Equipo Five Stack
 
-  # VOTAR-380: rate limiting + CORS en API
   missing-hardening@api-nestjs:
     status: mitigated
     justification: >
-      Rate limiting diferenciado por criticidad de endpoint, CORS con whitelist de orígenes y
-      encabezados de seguridad complementarios en el API Router.
+      Helmet/CSP API, rate limiting, CORS whitelist, REQUIRE_HTTPS opcional (VOTAR-380/381).
     ticket: VOTAR-380
     date: 2026-09-07
     checked_by: Equipo Five Stack
 
+  missing-hardening@db-postgresql:
+    status: in-progress
+    justification: >
+      Backups cifrados AES-GCM implementados (VOTAR-388). Pendiente SSL obligatorio en TypeORM
+      y hardening de roles/config del servidor Postgres en despliegue.
+    ticket: VOTAR-388
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  # --- DoS ---
   dos-risky-access-across-trust-boundary@api-nestjs@*:
     status: mitigated
     justification: >
-      Mitigación anti-DoS con rate limiting (HTTP 429), límites más estrictos en autenticación/voto
-      y políticas CORS restrictivas.
+      IpRateLimitGuard con tiers AUTH/VOTE/PUBLIC (VOTAR-380); e2e rate-limit-cors.
     ticket: VOTAR-380
     date: 2026-09-07
     checked_by: Equipo Five Stack
 
-  # XSS: CSP de Helmet reduce vector; se mantiene seguimiento parcial
-  cross-site-scripting@spa-bud:
+  dos-risky-access-across-trust-boundary@db-postgresql@api-nestjs@api-nestjs>api-a-postgresql->:
+    status: accepted
+    justification: >
+      DB solo accesible vía API Nest (no expuesta a Internet en el modelo). Protección DoS
+      delegada al rate limit del API y aislamiento de red en despliegue.
+    ticket: VOTAR-380
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  # --- Vault / WAF / Cloud / Build ---
+  missing-vault@api-nestjs:
+    status: accepted
+    justification: >
+      Secretos vía variables de entorno / .env (DB_PASSWORD, PRIVATE_KEY, JWT, SMTP).
+      Sin HashiCorp Vault en alcance académico; documentado como deuda (pregunta abierta en modelo).
+    ticket: code-review-back
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  missing-waf@api-nestjs:
+    status: accepted
+    justification: >
+      Sin WAF dedicado en repos. Mitigaciones de aplicación: Helmet, CORS, rate limit, CSP nginx.
+      WAF quedaría en capa de hosting (fuera de alcance del piloto).
+    ticket: VOTAR-380
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  missing-build-infrastructure@api-nestjs:
+    status: accepted
+    justification: >
+      CI GitHub Actions existe en back, front y blockchain (lint/test/e2e/Slither). Omitido del
+      modelo condensado a propósito; no implica ausencia de pipeline.
+    ticket: code-review-ci
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  missing-cloud-hardening@*:
+    status: accepted
+    justification: >
+      Despliegue académico/testnet sin cloud vendor managed específico modelado. Hardening
+      aplicado a app (headers, CORS, rate limit) y contratos (OZ + Slither).
+    ticket: code-review
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  # --- Contenedores front ---
+  container-baseimage-backdooring@spa-bud:
+    status: accepted
+    justification: >
+      Imágenes oficiales node:24-alpine y nginx:1.27-alpine multi-stage (front/deploy/Dockerfile).
+      Riesgo residual de supply-chain aceptado; sin registry privado en el piloto.
+    ticket: code-review-front
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  container-baseimage-backdooring@spa-panel-admin:
+    status: accepted
+    justification: >
+      Misma imagen Docker que BUD (SPA única).
+    ticket: code-review-front
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  # --- Cifrado ---
+  unencrypted-communication@api-nestjs>api-a-postgresql@api-nestjs@db-postgresql:
+    status: accepted
+    justification: >
+      TypeORM sin SSL en config local/dev. En producción se asume red privada / TLS en proxy;
+      deuda explícita para forzar ssl en database.config.ts.
+    ticket: code-review-back
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  unencrypted-asset@db-postgresql:
     status: in-progress
     justification: >
-      CSP y cabeceras Helmet (VOTAR-381) mitigan parte del vector XSS; falta cierre formal de
-      encoding sistemático en todos los outputs del frontend.
+      Backups cifrados AES-256-GCM (VOTAR-388). Cifrado at-rest del volumen Postgres depende del hosting.
+    ticket: VOTAR-388
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  unencrypted-asset@spa-bud:
+    status: accepted
+    justification: >
+      SPA estática servida por nginx; no almacena datos sensibles at-rest propios (sesión en cookies HttpOnly).
+      Seed efímera en localStorage es trade-off de revoto documentado.
+    ticket: code-review-front
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  unencrypted-asset@sc-votar:
+    status: false-positive
+    justification: >
+      Ledger público: la confidencialidad se logra con hashes/nullifiers/EIP-712, no cifrado at-rest
+      del contrato (VOTAR-378 Ley 25.326 tests en blockchain).
+    ticket: VOTAR-378
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  unnecessary-technical-asset@sc-votar:
+    status: false-positive
+    justification: >
+      Contratos (Ballot, VoteRegistry, MerkleRootStore, ElectionFactory, AuditView) son el núcleo
+      de integridad electoral on-chain; el hallazgo de Threagile por falta de data assets en el
+      modelo está corregido/enriquecido — activo necesario.
+    ticket: VOTAR-377
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  # --- Acceso desde Internet / datastore ---
+  unguarded-access-from-internet@spa-bud@browser-usuario@browser-usuario>carga-bud:
+    status: accepted
+    justification: >
+      SPA pública detrás de nginx+TLS; protección por CSP/headers, no por VPN.
     ticket: VOTAR-381
     date: 2026-09-07
     checked_by: Equipo Five Stack
 
-  cross-site-scripting@spa-panel-admin:
-    status: in-progress
+  unguarded-access-from-internet@spa-panel-admin@browser-usuario@browser-usuario>carga-panel:
+    status: accepted
     justification: >
-      CSP y cabeceras Helmet (VOTAR-381) mitigan parte del vector XSS en el Panel Admin.
-    ticket: VOTAR-381
-    date: 2026-09-07
-    checked_by: Equipo Five Stack
-
-  # CSRF: same-site / cookies HttpOnly en app; tracking
-  cross-site-request-forgery@spa-panel-admin@browser-usuario>carga-panel:
-    status: in-progress
-    justification: >
-      Sesión admin con JWT en cookies HttpOnly y 2FA (VOTAR-458); pendiente documentar tokens
-      anti-CSRF / SameSite de forma explícita en todos los formularios mutantes.
+      Panel Admin expuesto con auth+2FA; sin reverse-proxy de auth adicional en el piloto.
     ticket: VOTAR-458
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  unguarded-access-from-internet@api-nestjs@*:
+    status: accepted
+    justification: >
+      API Internet-facing con CORS, rate limit, Helmet y auth por ruta. Sin API gateway/WAF dedicado.
+    ticket: VOTAR-380
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  unguarded-access-from-internet@db-postgresql@api-nestjs@api-nestjs>api-a-postgresql:
+    status: mitigated
+    justification: >
+      PostgreSQL no se expone a Internet: solo NestJS→TypeORM. Aislamiento de red asumido en despliegue.
+    ticket: code-review-back
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  unguarded-direct-datastore-access@api-nestjs>api-a-postgresql@api-nestjs@db-postgresql:
+    status: accepted
+    justification: >
+      El acceso directo API→DB es el patrón Nest/TypeORM esperado (sin capa BFF adicional).
+      La “guarda” es la propia API con authz; no hay clientes externos a Postgres.
+    ticket: code-review-back
+    date: 2026-09-07
+    checked_by: Equipo Five Stack
+
+  # --- SSRF: destinos fijos por env, no URLs de usuario ---
+  server-side-request-forgery@*:
+    status: mitigated
+    justification: >
+      Salidas a Autogestión, JWKS, RPC y SMTP usan URLs de configuración (env), no input de
+      request. RPC exige HTTPS salvo loopback (assertRpcUrlsUseHttpsExceptLoopback). Front/back.
+    ticket: VOTAR-386
     date: 2026-09-07
     checked_by: Equipo Five Stack
 
