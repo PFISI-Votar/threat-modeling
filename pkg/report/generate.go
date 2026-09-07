@@ -47,7 +47,7 @@ func mergeHideChaptersFromModelYAML(modelFilename string, hideChapters map[Chapt
 	if hideChapters == nil {
 		hideChapters = make(map[ChaptersToShowHide]bool)
 	}
-	data, err := os.ReadFile(modelFilename)
+	data, err := os.ReadFile(filepath.Clean(modelFilename)) // #nosec G304 // modelFilename comes from CLI/config input path, same as other model loaders
 	if err != nil {
 		return hideChapters
 	}
