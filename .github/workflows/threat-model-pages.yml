@@ -28,12 +28,15 @@ jobs:
       - name: Analyze threat model with Threagile
         run: |
           mkdir -p dist
+          # Image runs as uid 1000; GHA runner owns ./dist as another uid → permission denied.
+          chmod 777 dist
           docker run --rm --shm-size=256m \
             -v "$PWD":/app/work \
             threagile/threagile \
             -model /app/work/threagile.yaml \
             -output /app/work/dist \
             -ignore-orphaned-risk-tracking
+          sudo chown -R "$(id -u):$(id -g)" dist
 
       - name: Write GitHub Pages index
         run: |

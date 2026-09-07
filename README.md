@@ -10,6 +10,7 @@ Este repositorio incluye el modelo de amenazas de **VOTAR** (`threagile.yaml`) y
 
 ```shell
 mkdir -p dist
+chmod 777 dist
 docker run --rm --shm-size=256m \
   -v "$(pwd)":/app/work \
   threagile/threagile \
