@@ -2,6 +2,37 @@
 
 [![Threagile Community Chat](https://badges.gitter.im/Threagile/community.svg)](https://gitter.im/Threagile/community)
 
+## VOTAR Threat Model
+
+Este repositorio incluye el modelo de amenazas de **VOTAR** (`threagile.yaml`) y publica automáticamente los artefactos de análisis en **GitHub Pages**.
+
+### Analizar en local
+
+```shell
+mkdir -p dist
+docker run --rm --shm-size=256m \
+  -v "$(pwd)":/app/work \
+  threagile/threagile \
+  -model /app/work/threagile.yaml \
+  -output /app/work/dist \
+  -ignore-orphaned-risk-tracking
+```
+
+Los reportes quedan en `./dist` (`report.pdf`, diagramas PNG, JSON, Excel).
+
+### GitHub Pages
+
+El workflow [`.github/workflows/threat-model-pages.yml`](.github/workflows/threat-model-pages.yml) corre Threagile en cada push a `master` que toque el modelo (o vía `workflow_dispatch`), genera un `index.html` en `dist/` y despliega esa carpeta a GitHub Pages.
+
+Una sola vez en el repo: **Settings → Pages → Source: GitHub Actions**.
+
+Criterio de alcance del modelo:
+
+- **In-scope:** BUD y Panel Admin (SPAs custom con lógica crítica), API NestJS, PostgreSQL, smart contracts.
+- **Out-of-scope:** browser/OS del usuario y Dashboard Público (visor de auditoría ciudadana).
+
+---
+
 ## Agile Threat Modeling Toolkit
 Threagile (see [threagile.io](https://threagile.io) for more details) is an open-source toolkit for
 agile threat modeling:

@@ -12,6 +12,9 @@ stats.json
 .vscode
 .task
 
+# Threagile analysis output (published via GitHub Pages from CI)
+/dist/
+
 # Binaries for programs and plugins
 *.exe
 *.exe~
@@ -35,4 +38,3 @@ stats.json
 /config.json
 /config.yaml
 /tmp/
-/threagile.yaml

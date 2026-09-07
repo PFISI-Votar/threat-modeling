@@ -1,0 +1,1160 @@
+threagile_version: 1.0.0
+
+title: VOTAR Threat Model
+
+date: 2026-09-06
+
+author:
+  name: Equipo Five Stack – UTN FRVM
+  homepage: https://github.com/PFISI-Votar
+
+
+management_summary_comment: >
+  VOTAR – Plataforma de Votación Electrónica con Tecnología Blockchain (UTN FRVM,
+  Equipo Five Stack). Plataforma open source para comicios de pequeña y mediana
+  escala (piloto CEUTI). Combina un backend off-chain (NestJS / PostgreSQL) con
+  smart contracts en Ethereum Sepolia para verificabilidad E2E, inmutabilidad del
+  escrutinio y desvinculación criptográfica identidad→voto (Ley 25.326).
+  La BUD y el Panel Admin están <b>in-scope</b> (lógica custom crítica: claves efímeras,
+  commit/reveal, TOTP/JWT). El Dashboard Público y el browser/OS del usuario quedan
+  <b>out-of-scope</b> (visor de auditoría ciudadana / endpoint no controlado).
+
+business_criticality: critical
+
+
+business_overview:
+  description: >
+    VOTAR digitaliza procesos electorales institucionales garantizando seguridad criptográfica,
+    transparencia on-chain, verificabilidad extremo a extremo y anonimato del votante mediante
+    desvinculación identidad→sufragio. Política de re-voto: LAST_VOTE_WINS. Alcance académico
+    limitado a testnet Sepolia; Mainnet y comicios estatales quedan fuera de alcance.
+  images:
+
+
+technical_overview:
+  description: >
+    Frontends React (BUD, Panel Admin, Dashboard Público). API NestJS 11 con TypeORM sobre
+    PostgreSQL 16 (configuración, padrón hasheado, audit log; sin vínculo identidad→voto).
+    Autenticación vía SSO Autogestión UTN (JWT en cookies HttpOnly; TOTP opcional para admin).
+    Entidad de Firmas (commit autenticado / reveal anónimo). Emisión de voto desde la BUD con
+    wallet efímera secp256k1 hacia Sepolia vía proveedores RPC. Contratos Solidity/OpenZeppelin
+    (ElectionFactory, Ballot, VoteRegistry, MerkleRootStore, AccessControl).
+  images:
+
+
+questions:
+  Cómo se custodian las claves VALIDATOR / PAUSER / deployer en el entorno de despliegue?: ""
+  El RPC provider (Alchemy/Infura/QuickNode) está bajo SLA y controles contractuales adecuados?: ""
+  Existe rotación y HSM/vault para secretos operativos del backend?: ""
+  El reverse proxy de producción fuerza HTTPS y cabeceras alineadas a VOTAR-381?: ""
+
+
+abuse_cases:
+  Manipulación del padrón o de la raíz Merkle: >
+    Como atacante quiero alterar el padrón hasheado o publicar una raíz Merkle fraudulenta
+    para habilitar electores ilegítimos o excluir habilitados.
+  Vinculación identidad-voto: >
+    Como atacante o insider quiero correlacionar la identidad SSO con el sufragio on-chain
+    para romper el secreto del voto (violación Ley 25.326).
+  Robo o abuso de claves operativas: >
+    Como atacante quiero exfiltrar VALIDATOR_PRIVATE_KEY, claves de deployer o pauser para
+    firmar validaciones falsas, pausar comicios o desplegar contratos maliciosos.
+  Compromiso de sesión admin: >
+    Como atacante quiero secuestrar la sesión JWT/TOTP de una Autoridad Electoral para
+    reconfigurar comicios, cargar padrones o publicar raíces on-chain.
+  Manipulación del cliente de voto (BUD): >
+    Como atacante quiero inyectar código (XSS/supply-chain del bundle) en la BUD para
+    alterar la selección, filtrar claves efímeras o redirigir la transacción de voto.
+  Doble voto o bypass de nullifier: >
+    Como atacante quiero emitir sufragios múltiples no contemplados o evadir la unicidad
+    criptográfica del VoteRegistry.
+  Denegación de servicio electoral: >
+    Como atacante quiero saturar API, RPC o contratos para impedir la emisión o el escrutinio
+    durante la ventana del comicio.
+  Falsificación de resultados públicos: >
+    Como atacante quiero presentar escrutinio alterado (off-chain) respecto del estado canónico
+    on-chain para dañar la confianza ciudadana.
+
+
+security_requirements:
+  Desvinculación identidad-voto: Ningún almacén off-chain debe persistir el vínculo entre identidad institucional y selección de voto (Ley 25.326).
+  Verificabilidad E2E: Cada votante debe poder verificar que su sufragio fue contabilizado sin revelar su elección.
+  Autenticación admin reforzada: Acceso de Autoridad Electoral con JWT HttpOnly y TOTP (2FA) donde aplique.
+  Integridad del padrón: Raíz Merkle publicada on-chain antes de abrir el comicio; padrón sellado en estado OPEN.
+  Hardening web: Cabeceras de seguridad (CSP, HSTS, etc.) en interfaces expuestas (VOTAR-381).
+  Secretos operativos: Claves de cadena y JWT material nunca en el frontend; custodia en backend/ops.
+  LAST_VOTE_WINS: La política de re-voto debe aplicarse de forma consistente off-chain y on-chain.
+
+
+tags_available:
+  - react
+  - nestjs
+  - postgresql
+  - solidity
+  - ethereum-sepolia
+  - oauth-oidc
+  - merkle
+  - e2e-verifiability
+  - utn-frvm
+
+
+data_assets:
+
+  Client Application Code:
+    id: client-application-code
+    description: >
+      Bundles JavaScript/TypeScript de las SPAs (BUD, Panel Admin, Dashboard) servidos a los
+      navegadores. Incluye lógica client-side de la BUD (crypto, commit/reveal).
+    usage: devops
+    tags:
+      - react
+    origin: Equipo Five Stack
+    owner: Equipo Five Stack
+    quantity: few
+    confidentiality: public
+    integrity: critical
+    availability: important
+    justification_cia_rating: >
+      Integridad crítica: un bundle manipulado puede alterar el voto o filtrar claves efímeras.
+      Confidencialidad pública (código open source). Disponibilidad importante para el comicio.
+
+
+  Server Application Code:
+    id: server-application-code
+    description: Código del API NestJS y scripts de despliegue/orquestación off-chain.
+    usage: devops
+    tags:
+      - nestjs
+    origin: Equipo Five Stack
+    owner: Equipo Five Stack
+    quantity: few
+    confidentiality: internal
+    integrity: critical
+    availability: important
+    justification_cia_rating: >
+      Integridad crítica del motor off-chain (Merkle, firmas, auth). No es secreto público completo.
+
+
+  Smart Contract Code:
+    id: smart-contract-code
+    description: Bytecode/ABI de contratos Solidity desplegados en Sepolia (ElectionFactory, Ballot, VoteRegistry, MerkleRootStore, AccessControl).
+    usage: devops
+    tags:
+      - solidity
+      - ethereum-sepolia
+    origin: Equipo Five Stack
+    owner: Equipo Five Stack
+    quantity: few
+    confidentiality: public
+    integrity: mission-critical
+    availability: critical
+    justification_cia_rating: >
+      Integridad mission-critical: lógica electoral canónica e inmutable on-chain.
+
+
+  Identidad Institucional:
+    id: da-voter-identity
+    description: Identidad SSO del votante/autoridad (email, legajo, subject). No debe vincularse al voto.
+    usage: business
+    tags:
+      - oauth-oidc
+    origin: SSO Autogestión UTN
+    owner: UTN FRVM / Autoridad Electoral
+    quantity: many
+    confidentiality: confidential
+    integrity: critical
+    availability: important
+    justification_cia_rating: >
+      PII institucional; integridad crítica para habilitación electoral; no se almacena ligada al sufragio.
+
+
+  Sesiones JWT:
+    id: da-session-tokens
+    description: Access/refresh tokens en cookies HttpOnly (admin y votante).
+    usage: business
+    tags:
+    origin: API NestJS
+    owner: Equipo Five Stack
+    quantity: many
+    confidentiality: strictly-confidential
+    integrity: critical
+    availability: important
+    justification_cia_rating: >
+      Credenciales de sesión; compromiso implica suplantación de votante o autoridad.
+
+
+  Secretos TOTP Admin:
+    id: da-totp-secrets
+    description: Secretos TOTP de autoridades electorales (2FA).
+    usage: business
+    tags:
+    origin: API NestJS
+    owner: Autoridad Electoral
+    quantity: few
+    confidentiality: strictly-confidential
+    integrity: critical
+    availability: operational
+    justification_cia_rating: >
+      Segundo factor admin; filtración permite bypass de 2FA.
+
+
+  Configuracion Electoral:
+    id: da-election-config
+    description: Estado del comicio, fechas, política de re-voto, flags de visibilidad del dashboard.
+    usage: business
+    tags:
+    origin: Autoridad Electoral
+    owner: Autoridad Electoral
+    quantity: few
+    confidentiality: internal
+    integrity: critical
+    availability: critical
+    justification_cia_rating: >
+      Define la ventana y reglas del comicio; manipulación altera el proceso electoral.
+
+
+  Oferta Electoral:
+    id: da-ballot-offer
+    description: Categorías, listas, candidatos y boleta oficializada.
+    usage: business
+    tags:
+    origin: Autoridad Electoral
+    owner: Autoridad Electoral
+    quantity: few
+    confidentiality: public
+    integrity: critical
+    availability: critical
+    justification_cia_rating: >
+      Debe coincidir con lo votable; integridad crítica aunque sea públicamente visible.
+
+
+  Hashes Padron Merkle:
+    id: da-padron-hashes
+    description: Hojas hash Keccak del padrón, árbol Merkle y raíz off-chain (sin PII en claro).
+    usage: business
+    tags:
+      - merkle
+    origin: API NestJS / importación CSV
+    owner: Autoridad Electoral
+    quantity: many
+    confidentiality: internal
+    integrity: mission-critical
+    availability: critical
+    justification_cia_rating: >
+      Base de elegibilidad criptográfica; corrupción habilita votos ilegítimos.
+
+
+  Raiz Merkle On-Chain:
+    id: da-merkle-root-onchain
+    description: Raíz del padrón anclada en MerkleRootStore (Sepolia).
+    usage: business
+    tags:
+      - merkle
+      - ethereum-sepolia
+    origin: API NestJS / Autoridad Electoral
+    owner: Autoridad Electoral
+    quantity: few
+    confidentiality: public
+    integrity: mission-critical
+    availability: critical
+    justification_cia_rating: >
+      Sello público de integridad del padrón; mission-critical para apertura del comicio.
+
+
+  Credenciales Validacion:
+    id: da-validation-credential
+    description: Vouchers commit/reveal de la Entidad de Firmas (desvinculación identidad→voto).
+    usage: business
+    tags:
+      - e2e-verifiability
+    origin: Entidad de Firmas (API)
+    owner: Equipo Five Stack
+    quantity: many
+    confidentiality: strictly-confidential
+    integrity: mission-critical
+    availability: critical
+    justification_cia_rating: >
+      Material criptográfico del desacople; filtración o reuso rompe anonimato o permite fraude.
+
+
+  Claves Efimeras Cliente:
+    id: da-ephemeral-keys
+    description: Par ECC secp256k1 generado en RAM del navegador por la BUD; nunca persistido.
+    usage: business
+    tags:
+      - e2e-verifiability
+    origin: BUD (Web Crypto / @noble/secp256k1)
+    owner: Votante
+    quantity: many
+    confidentiality: strictly-confidential
+    integrity: mission-critical
+    availability: operational
+    justification_cia_rating: >
+      Firma el voto; compromiso permite suplantar el sufragio o vincular identidad.
+
+
+  Claves Operativas Cadena:
+    id: da-ops-keys
+    description: VALIDATOR_PRIVATE_KEY, deployer, pauser y demás claves de roles on-chain custodiadas por backend/ops.
+    usage: devops
+    tags:
+      - ethereum-sepolia
+    origin: Operaciones VOTAR
+    owner: Equipo Five Stack
+    quantity: very-few
+    confidentiality: strictly-confidential
+    integrity: mission-critical
+    availability: critical
+    justification_cia_rating: >
+      Control de roles on-chain; compromiso es catastrófico para integridad electoral.
+
+
+  Votos On-Chain:
+    id: da-votes-onchain
+    description: Registros canónicos de voto (nullifier, selección, tallies) en VoteRegistry/Ballot.
+    usage: business
+    tags:
+      - ethereum-sepolia
+      - e2e-verifiability
+    origin: BUD vía RPC
+    owner: Electorado / Autoridad Electoral
+    quantity: many
+    confidentiality: restricted
+    integrity: mission-critical
+    availability: critical
+    justification_cia_rating: >
+      Fuente de verdad del escrutinio; integridad mission-critical. Confidencialidad restringida (público el tally, no la identidad).
+
+
+  Recibo Cripto Vote:
+    id: da-vote-receipt
+    description: Recibo/código de verificación E2E del sufragio para el votante.
+    usage: business
+    tags:
+      - e2e-verifiability
+    origin: BUD / contratos de verificación
+    owner: Votante
+    quantity: many
+    confidentiality: confidential
+    integrity: critical
+    availability: important
+    justification_cia_rating: >
+      Permite verificación individual; no debe filtrar la selección.
+
+
+  Audit Log:
+    id: da-audit-log
+    description: Bitácora append-only de eventos administrativos y de sistema (sin vínculo voto-identidad).
+    usage: business
+    tags:
+    origin: API NestJS
+    owner: Autoridad Electoral
+    quantity: many
+    confidentiality: internal
+    integrity: critical
+    availability: important
+    justification_cia_rating: >
+      Trazabilidad de acciones privilegiadas; integridad crítica para auditoría.
+
+
+  Backups Cifrados:
+    id: da-db-backups
+    description: Dumps PostgreSQL cifrados (AES-256-GCM) y alertas asociadas.
+    usage: devops
+    tags:
+      - postgresql
+    origin: Job de backup
+    owner: Equipo Five Stack
+    quantity: few
+    confidentiality: confidential
+    integrity: critical
+    availability: important
+    justification_cia_rating: >
+      Contiene configuración y hashes de padrón; cifrado en reposo requerido.
+
+
+  CSV Padron Upload:
+    id: da-csv-padron-upload
+    description: Archivo CSV de padrón en tránsito durante la importación (PII transitoria).
+    usage: business
+    tags:
+    origin: Autoridad Electoral
+    owner: Autoridad Electoral
+    quantity: few
+    confidentiality: confidential
+    integrity: critical
+    availability: operational
+    justification_cia_rating: >
+      PII electoral en carga; debe procesarse y no persistir en claro ligada al voto.
+
+
+  Indice Blockchain:
+    id: da-blockchain-index
+    description: Referencias off-chain a transacciones y direcciones de contratos (tx hash, contract refs).
+    usage: business
+    tags:
+      - ethereum-sepolia
+    origin: API NestJS
+    owner: Equipo Five Stack
+    quantity: few
+    confidentiality: public
+    integrity: important
+    availability: operational
+    justification_cia_rating: Metadatos de anclaje; integridad importante para trazabilidad.
+
+
+technical_assets:
+
+  Browser Usuario:
+    id: browser-usuario
+    description: >
+      Navegador y sistema operativo del usuario final (votante, autoridad o ciudadano).
+      Endpoint no controlado por el equipo VOTAR.
+    type: external-entity
+    usage: business
+    used_as_client_by_human: true
+    out_of_scope: true
+    justification_out_of_scope: >
+      No se controla el hardening del dispositivo/navegador del usuario. La lógica custom
+      se modela en BUD/Panel (in-scope) y el bundle como data asset Client Application Code.
+    size: component
+    technology: browser
+    tags:
+    internet: true
+    machine: physical
+    encryption: none
+    owner: Usuario final
+    confidentiality: confidential
+    integrity: important
+    availability: operational
+    justification_cia_rating: Dispositivo del usuario fuera del perímetro controlado.
+    multi_tenant: false
+    redundant: false
+    custom_developed_parts: false
+    data_assets_processed:
+      - client-application-code
+      - da-session-tokens
+      - da-ephemeral-keys
+    data_assets_stored:
+    data_formats_accepted:
+      - json
+    communication_links:
+      Carga BUD:
+        target: spa-bud
+        description: El navegador del votante ejecuta/carga la Boleta Única Digital
+        protocol: https
+        authentication: none
+        authorization: none
+        tags:
+        vpn: false
+        ip_filtered: false
+        readonly: true
+        usage: business
+        data_assets_sent:
+        data_assets_received:
+          - client-application-code
+      Carga Panel:
+        target: spa-panel-admin
+        description: El navegador de la autoridad carga el Panel de Administración
+        protocol: https
+        authentication: none
+        authorization: none
+        tags:
+        vpn: false
+        ip_filtered: false
+        readonly: true
+        usage: business
+        data_assets_sent:
+        data_assets_received:
+          - client-application-code
+      Carga Dashboard:
+        target: spa-dashboard
+        description: El ciudadano/auditor observa el Dashboard Público
+        protocol: https
+        authentication: none
+        authorization: none
+        tags:
+        vpn: false
+        ip_filtered: false
+        readonly: true
+        usage: business
+        data_assets_sent:
+        data_assets_received:
+          - client-application-code
+
+
+  BUD Boleta Unica Digital:
+    id: spa-bud
+    description: >
+      SPA React de votación. Genera claves efímeras, ejecuta commit/reveal (Entidad de Firmas),
+      construye y firma el voto, transmite castSignedVote vía RPC. Lógica crítica E2E in-scope.
+    type: process
+    usage: business
+    used_as_client_by_human: true
+    out_of_scope: false
+    justification_out_of_scope:
+    size: application
+    technology: web-application
+    tags:
+      - react
+      - e2e-verifiability
+      - merkle
+    internet: true
+    machine: container
+    encryption: none
+    owner: Equipo Five Stack
+    confidentiality: strictly-confidential
+    integrity: mission-critical
+    availability: critical
+    justification_cia_rating: >
+      Procesa claves efímeras y el voto; integridad y confidencialidad mission-critical para
+      anonimato y E2E. business_criticality del sistema es critical.
+    multi_tenant: false
+    redundant: false
+    custom_developed_parts: true
+    data_assets_processed:
+      - client-application-code
+      - da-session-tokens
+      - da-voter-identity
+      - da-ballot-offer
+      - da-padron-hashes
+      - da-validation-credential
+      - da-ephemeral-keys
+      - da-votes-onchain
+      - da-vote-receipt
+      - da-election-config
+    data_assets_stored:
+      - da-ephemeral-keys
+    data_formats_accepted:
+      - json
+    communication_links:
+      BUD a API:
+        target: api-nestjs
+        description: HTTPS/JSON autenticado (cookie votante) — login, Merkle proof, commit autenticado
+        protocol: https
+        authentication: token
+        authorization: technical-user
+        tags:
+        vpn: false
+        ip_filtered: false
+        readonly: false
+        usage: business
+        data_assets_sent:
+          - da-session-tokens
+          - da-voter-identity
+          - da-validation-credential
+        data_assets_received:
+          - da-session-tokens
+          - da-ballot-offer
+          - da-padron-hashes
+          - da-validation-credential
+          - da-election-config
+          - client-application-code
+      BUD Reveal Anonimo:
+        target: api-nestjs
+        description: Reveal anónimo (credentials omit) hacia Entidad de Firmas — sin cookie de sesión
+        protocol: https
+        authentication: none
+        authorization: none
+        tags:
+        vpn: false
+        ip_filtered: false
+        readonly: false
+        usage: business
+        data_assets_sent:
+          - da-validation-credential
+        data_assets_received:
+          - da-validation-credential
+      BUD a RPC:
+        target: rpc-provider
+        description: Transmisión castSignedVote / lecturas de cadena desde la BUD
+        protocol: https
+        authentication: none
+        authorization: none
+        tags:
+          - ethereum-sepolia
+        vpn: false
+        ip_filtered: false
+        readonly: false
+        usage: business
+        data_assets_sent:
+          - da-votes-onchain
+          - da-ephemeral-keys
+          - da-validation-credential
+        data_assets_received:
+          - da-votes-onchain
+          - da-vote-receipt
+          - da-merkle-root-onchain
+
+
+  Panel Administracion:
+    id: spa-panel-admin
+    description: >
+      SPA React de gestión electoral (padrón CSV, configuración, publicación Merkle, ciclo de vida).
+      Autenticación admin JWT + TOTP. In-scope como aplicación custom.
+    type: process
+    usage: business
+    used_as_client_by_human: true
+    out_of_scope: false
+    justification_out_of_scope:
+    size: application
+    technology: web-application
+    tags:
+      - react
+    internet: true
+    machine: container
+    encryption: none
+    owner: Equipo Five Stack
+    confidentiality: confidential
+    integrity: critical
+    availability: critical
+    justification_cia_rating: >
+      Gestiona padrón y publicación on-chain; compromiso admin impacta la integridad del comicio.
+    multi_tenant: false
+    redundant: false
+    custom_developed_parts: true
+    data_assets_processed:
+      - client-application-code
+      - da-session-tokens
+      - da-totp-secrets
+      - da-voter-identity
+      - da-election-config
+      - da-ballot-offer
+      - da-csv-padron-upload
+      - da-padron-hashes
+      - da-merkle-root-onchain
+      - da-audit-log
+    data_assets_stored:
+    data_formats_accepted:
+      - json
+      - csv
+    communication_links:
+      Panel a API:
+        target: api-nestjs
+        description: HTTPS admin (JWT cookie + TOTP) para gestión electoral
+        protocol: https
+        authentication: two-factor
+        authorization: technical-user
+        tags:
+        vpn: false
+        ip_filtered: false
+        readonly: false
+        usage: business
+        data_assets_sent:
+          - da-session-tokens
+          - da-totp-secrets
+          - da-election-config
+          - da-ballot-offer
+          - da-csv-padron-upload
+        data_assets_received:
+          - da-session-tokens
+          - da-election-config
+          - da-ballot-offer
+          - da-padron-hashes
+          - da-merkle-root-onchain
+          - da-audit-log
+          - client-application-code
+
+
+  Dashboard Publico:
+    id: spa-dashboard
+    description: >
+      SPA de auditoría ciudadana (resultados, participación, verificación de recibo). Acceso
+      público sin autenticación. Fuera de alcance: se trata como el browser (no se analiza el
+      hardening de esta pieza con el grueso de reglas automáticas).
+    type: external-entity
+    usage: business
+    used_as_client_by_human: true
+    out_of_scope: true
+    justification_out_of_scope: >
+      Visor público de solo lectura / auditoría ciudadana. Fuera de alcance deliberado,
+      mismo criterio que el browser/OS no controlado.
+    size: application
+    technology: browser
+    tags:
+      - react
+    internet: true
+    machine: container
+    encryption: none
+    owner: Equipo Five Stack
+    confidentiality: public
+    integrity: important
+    availability: important
+    justification_cia_rating: Datos mayormente públicos; integridad reputacional importante.
+    multi_tenant: false
+    redundant: false
+    custom_developed_parts: true
+    data_assets_processed:
+      - client-application-code
+      - da-votes-onchain
+      - da-election-config
+      - da-vote-receipt
+      - da-merkle-root-onchain
+    data_assets_stored:
+    data_formats_accepted:
+      - json
+    communication_links:
+      Dashboard a API:
+        target: api-nestjs
+        description: Consultas públicas de metadatos/resultados off-chain
+        protocol: https
+        authentication: none
+        authorization: none
+        tags:
+        vpn: false
+        ip_filtered: false
+        readonly: true
+        usage: business
+        data_assets_sent:
+        data_assets_received:
+          - da-election-config
+          - da-votes-onchain
+          - client-application-code
+
+
+  API NestJS:
+    id: api-nestjs
+    description: >
+      Backend off-chain NestJS: auth BFF, Merkle, Entidad de Firmas, lifecycle electoral,
+      orquestación RPC, WebSocket de eventos, backups y audit log.
+    type: process
+    usage: business
+    used_as_client_by_human: false
+    out_of_scope: false
+    justification_out_of_scope:
+    size: service
+    technology: web-service-rest
+    tags:
+      - nestjs
+      - merkle
+    internet: true
+    machine: virtual
+    encryption: none
+    owner: Equipo Five Stack
+    confidentiality: strictly-confidential
+    integrity: mission-critical
+    availability: critical
+    justification_cia_rating: >
+      Orquesta auth, desvinculación y publicación on-chain; CIA altos alineados a critical.
+    multi_tenant: false
+    redundant: false
+    custom_developed_parts: true
+    data_assets_processed:
+      - server-application-code
+      - client-application-code
+      - da-voter-identity
+      - da-session-tokens
+      - da-totp-secrets
+      - da-election-config
+      - da-ballot-offer
+      - da-csv-padron-upload
+      - da-padron-hashes
+      - da-validation-credential
+      - da-ops-keys
+      - da-merkle-root-onchain
+      - da-audit-log
+      - da-db-backups
+      - da-blockchain-index
+    data_assets_stored:
+    data_formats_accepted:
+      - json
+      - csv
+    communication_links:
+      API a PostgreSQL:
+        target: db-postgresql
+        description: Persistencia TypeORM (TCP)
+        protocol: sql-access-protocol
+        authentication: credentials
+        authorization: technical-user
+        tags:
+          - postgresql
+        vpn: false
+        ip_filtered: true
+        readonly: false
+        usage: business
+        data_assets_sent:
+          - da-election-config
+          - da-ballot-offer
+          - da-padron-hashes
+          - da-session-tokens
+          - da-totp-secrets
+          - da-validation-credential
+          - da-audit-log
+          - da-voter-identity
+        data_assets_received:
+          - da-election-config
+          - da-ballot-offer
+          - da-padron-hashes
+          - da-session-tokens
+          - da-totp-secrets
+          - da-validation-credential
+          - da-audit-log
+      API a SSO:
+        target: sso-autogestion
+        description: Validación de credenciales institucionales (BFF interino)
+        protocol: https
+        authentication: credentials
+        authorization: technical-user
+        tags:
+          - oauth-oidc
+        vpn: false
+        ip_filtered: false
+        readonly: true
+        usage: business
+        data_assets_sent:
+          - da-voter-identity
+        data_assets_received:
+          - da-voter-identity
+      API a RPC:
+        target: rpc-provider
+        description: Publicación Merkle, createElection, pause, lecturas de estado
+        protocol: https
+        authentication: credentials
+        authorization: technical-user
+        tags:
+          - ethereum-sepolia
+        vpn: false
+        ip_filtered: false
+        readonly: false
+        usage: business
+        data_assets_sent:
+          - da-merkle-root-onchain
+          - da-ops-keys
+          - da-election-config
+        data_assets_received:
+          - da-merkle-root-onchain
+          - da-votes-onchain
+      API a SMTP:
+        target: smtp-relay
+        description: Alertas operativas / backups
+        protocol: https
+        authentication: credentials
+        authorization: technical-user
+        tags:
+        vpn: false
+        ip_filtered: false
+        readonly: false
+        usage: devops
+        data_assets_sent:
+          - da-audit-log
+        data_assets_received:
+
+
+  PostgreSQL:
+    id: db-postgresql
+    description: >
+      PostgreSQL 16 — configuración electoral, padrón hasheado, credenciales de validación,
+      sesiones, TOTP, audit log. No almacena votos ni vínculo identidad→sufragio.
+    type: datastore
+    usage: business
+    used_as_client_by_human: false
+    out_of_scope: false
+    justification_out_of_scope:
+    size: service
+    technology: database
+    tags:
+      - postgresql
+    internet: false
+    machine: virtual
+    encryption: transparent
+    owner: Equipo Five Stack
+    confidentiality: strictly-confidential
+    integrity: mission-critical
+    availability: critical
+    justification_cia_rating: Almacén off-chain del proceso electoral; integridad mission-critical.
+    multi_tenant: false
+    redundant: false
+    custom_developed_parts: false
+    data_assets_processed:
+    data_assets_stored:
+      - da-election-config
+      - da-ballot-offer
+      - da-padron-hashes
+      - da-session-tokens
+      - da-totp-secrets
+      - da-validation-credential
+      - da-audit-log
+      - da-db-backups
+      - da-voter-identity
+    data_formats_accepted:
+      - json
+    communication_links:
+
+
+  SSO Autogestion:
+    id: sso-autogestion
+    description: IdP institucional UTN Autogestión (OAuth2/OIDC interino vía BFF).
+    type: external-entity
+    usage: business
+    used_as_client_by_human: false
+    out_of_scope: true
+    justification_out_of_scope: Sistema tercero de la universidad; fuera del perímetro VOTAR.
+    size: system
+    technology: identity-provider
+    tags:
+      - oauth-oidc
+    internet: true
+    machine: virtual
+    encryption: none
+    owner: UTN FRVM
+    confidentiality: confidential
+    integrity: critical
+    availability: important
+    justification_cia_rating: Fuente de identidad institucional.
+    multi_tenant: true
+    redundant: false
+    custom_developed_parts: false
+    data_assets_processed:
+      - da-voter-identity
+    data_assets_stored:
+      - da-voter-identity
+    data_formats_accepted:
+      - json
+    communication_links:
+
+
+  RPC Provider:
+    id: rpc-provider
+    description: Proveedor JSON-RPC (Alchemy / Infura / QuickNode) hacia Sepolia.
+    type: external-entity
+    usage: business
+    used_as_client_by_human: false
+    out_of_scope: true
+    justification_out_of_scope: Infraestructura de terceros; controles limitados al contrato de servicio.
+    size: system
+    technology: gateway
+    tags:
+      - ethereum-sepolia
+    internet: true
+    machine: virtual
+    encryption: none
+    owner: Proveedor RPC
+    confidentiality: restricted
+    integrity: critical
+    availability: critical
+    justification_cia_rating: Puente hacia la urna on-chain; disponibilidad crítica en comicio.
+    multi_tenant: true
+    redundant: true
+    custom_developed_parts: false
+    data_assets_processed:
+      - da-votes-onchain
+      - da-merkle-root-onchain
+      - da-ops-keys
+    data_assets_stored:
+    data_formats_accepted:
+      - json
+    communication_links:
+      RPC a Sepolia:
+        target: ethereum-sepolia
+        description: Reenvío de transacciones y eth_call a la testnet
+        protocol: https
+        authentication: none
+        authorization: none
+        tags:
+          - ethereum-sepolia
+        vpn: false
+        ip_filtered: false
+        readonly: false
+        usage: business
+        data_assets_sent:
+          - da-votes-onchain
+          - da-merkle-root-onchain
+          - smart-contract-code
+        data_assets_received:
+          - da-votes-onchain
+          - da-merkle-root-onchain
+
+
+  Ethereum Sepolia:
+    id: ethereum-sepolia
+    description: Red Ethereum Sepolia (testnet) que hospeda los smart contracts VOTAR.
+    type: external-entity
+    usage: business
+    used_as_client_by_human: false
+    out_of_scope: true
+    justification_out_of_scope: Red pública de prueba; el equipo no opera los validadores.
+    size: system
+    technology: unknown-technology
+    tags:
+      - ethereum-sepolia
+    internet: true
+    machine: virtual
+    encryption: none
+    owner: Ethereum community
+    confidentiality: public
+    integrity: critical
+    availability: important
+    justification_cia_rating: Disponibilidad de testnet no garantizada como Mainnet; integridad por consenso.
+    multi_tenant: true
+    redundant: true
+    custom_developed_parts: false
+    data_assets_processed:
+      - smart-contract-code
+      - da-votes-onchain
+      - da-merkle-root-onchain
+    data_assets_stored:
+      - da-votes-onchain
+      - da-merkle-root-onchain
+      - smart-contract-code
+    data_formats_accepted:
+    communication_links:
+
+
+  Smart Contracts VOTAR:
+    id: sc-votar
+    description: >
+      Contratos custom (ElectionFactory, Ballot, VoteRegistry, MerkleRootStore, AccessControl)
+      con RBAC on-chain y reglas LAST_VOTE_WINS / Merkle proof.
+    type: process
+    usage: business
+    used_as_client_by_human: false
+    out_of_scope: false
+    justification_out_of_scope:
+    size: component
+    technology: function
+    tags:
+      - solidity
+      - ethereum-sepolia
+    internet: true
+    machine: serverless
+    encryption: none
+    owner: Equipo Five Stack
+    confidentiality: public
+    integrity: mission-critical
+    availability: critical
+    justification_cia_rating: Lógica electoral canónica; mission-critical.
+    multi_tenant: false
+    redundant: true
+    custom_developed_parts: true
+    data_assets_processed:
+      - smart-contract-code
+      - da-votes-onchain
+      - da-merkle-root-onchain
+      - da-validation-credential
+      - da-ops-keys
+    data_assets_stored:
+      - da-votes-onchain
+      - da-merkle-root-onchain
+    data_formats_accepted:
+    communication_links:
+
+
+  SMTP Relay:
+    id: smtp-relay
+    description: Relay de correo para alertas operativas y de backup.
+    type: external-entity
+    usage: devops
+    used_as_client_by_human: false
+    out_of_scope: true
+    justification_out_of_scope: Servicio de correo externo.
+    size: system
+    technology: mail-server
+    tags:
+    internet: true
+    machine: virtual
+    encryption: none
+    owner: Proveedor SMTP
+    confidentiality: internal
+    integrity: operational
+    availability: operational
+    justification_cia_rating: Canal de alertas; no transporta votos.
+    multi_tenant: true
+    redundant: false
+    custom_developed_parts: false
+    data_assets_processed:
+      - da-audit-log
+    data_assets_stored:
+    data_formats_accepted:
+    communication_links:
+
+
+trust_boundaries:
+
+  Internet Zona Publica:
+    id: tb-internet
+    description: Zona internet — browsers y SPAs expuestas (BUD, Panel, Dashboard)
+    type: network-cloud-security-group
+    tags:
+    technical_assets_inside:
+      - browser-usuario
+      - spa-bud
+      - spa-panel-admin
+      - spa-dashboard
+    trust_boundaries_nested:
+
+  Zona Aplicacion:
+    id: tb-app
+    description: Zona de la API NestJS y procesos off-chain de negocio
+    type: network-cloud-security-group
+    tags:
+      - nestjs
+    technical_assets_inside:
+      - api-nestjs
+    trust_boundaries_nested:
+
+  Zona Datos:
+    id: tb-data
+    description: Zona de persistencia PostgreSQL (sin acceso directo desde internet)
+    type: network-cloud-security-group
+    tags:
+      - postgresql
+    technical_assets_inside:
+      - db-postgresql
+    trust_boundaries_nested:
+
+  Zona Blockchain:
+    id: tb-blockchain
+    description: Zona RPC + Sepolia + smart contracts VOTAR
+    type: network-cloud-provider
+    tags:
+      - ethereum-sepolia
+    technical_assets_inside:
+      - rpc-provider
+      - ethereum-sepolia
+      - sc-votar
+    trust_boundaries_nested:
+
+  Zona Identidad Externa:
+    id: tb-sso
+    description: Frontera del IdP institucional Autogestión
+    type: network-dedicated-hoster
+    tags:
+      - oauth-oidc
+    technical_assets_inside:
+      - sso-autogestion
+    trust_boundaries_nested:
+
+  Zona Correo:
+    id: tb-smtp
+    description: Frontera del relay SMTP de alertas
+    type: network-dedicated-hoster
+    tags:
+    technical_assets_inside:
+      - smtp-relay
+    trust_boundaries_nested:
+
+
+shared_runtimes:
+
+  Runtime Browser SPAs:
+    id: runtime-browser
+    description: Motor JavaScript del navegador donde corren BUD y Panel (Dashboard OOS)
+    tags:
+      - react
+    technical_assets_running:
+      - spa-bud
+      - spa-panel-admin
+
+  Runtime Node Backend:
+    id: runtime-node-api
+    description: Runtime Node.js del API NestJS
+    tags:
+      - nestjs
+    technical_assets_running:
+      - api-nestjs
+
+
+individual_risk_categories:
+
+
+risk_tracking:

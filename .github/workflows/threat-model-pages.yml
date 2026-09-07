@@ -1,0 +1,208 @@
+name: Threat Model Pages
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - threagile.yaml
+      - .github/workflows/threat-model-pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Analyze threat model with Threagile
+        run: |
+          mkdir -p dist
+          docker run --rm --shm-size=256m \
+            -v "$PWD":/app/work \
+            threagile/threagile \
+            -model /app/work/threagile.yaml \
+            -output /app/work/dist \
+            -ignore-orphaned-risk-tracking
+
+      - name: Write GitHub Pages index
+        run: |
+          cat > dist/index.html <<'EOF'
+          <!DOCTYPE html>
+          <html lang="es">
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <title>VOTAR – Threat Model (Threagile)</title>
+            <style>
+              :root {
+                --bg: #f4f6f8;
+                --ink: #1a1f24;
+                --muted: #5a6570;
+                --accent: #0b3d2e;
+                --line: #d5dde3;
+              }
+              * { box-sizing: border-box; }
+              body {
+                margin: 0;
+                font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+                color: var(--ink);
+                background:
+                  radial-gradient(1200px 500px at 10% -10%, #d9ebe3 0%, transparent 55%),
+                  radial-gradient(900px 400px at 100% 0%, #e7eef5 0%, transparent 50%),
+                  var(--bg);
+                line-height: 1.5;
+              }
+              main {
+                max-width: 960px;
+                margin: 0 auto;
+                padding: 3rem 1.25rem 4rem;
+              }
+              h1 {
+                font-size: clamp(1.8rem, 4vw, 2.6rem);
+                letter-spacing: -0.02em;
+                margin: 0 0 0.35rem;
+                color: var(--accent);
+              }
+              .lead {
+                color: var(--muted);
+                font-size: 1.05rem;
+                max-width: 42rem;
+                margin-bottom: 1.75rem;
+              }
+              .actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.75rem;
+                margin-bottom: 2.5rem;
+              }
+              a.btn {
+                display: inline-block;
+                padding: 0.65rem 1rem;
+                border: 1px solid var(--accent);
+                background: var(--accent);
+                color: #fff;
+                text-decoration: none;
+                font-family: ui-sans-serif, system-ui, sans-serif;
+                font-size: 0.95rem;
+              }
+              a.btn.secondary {
+                background: transparent;
+                color: var(--accent);
+              }
+              section {
+                margin-bottom: 2.5rem;
+              }
+              h2 {
+                font-size: 1.25rem;
+                margin: 0 0 0.75rem;
+                border-bottom: 1px solid var(--line);
+                padding-bottom: 0.35rem;
+              }
+              figure {
+                margin: 0 0 1.5rem;
+                background: #fff;
+                border: 1px solid var(--line);
+                padding: 0.75rem;
+              }
+              img {
+                display: block;
+                max-width: 100%;
+                height: auto;
+              }
+              figcaption {
+                font-family: ui-sans-serif, system-ui, sans-serif;
+                font-size: 0.85rem;
+                color: var(--muted);
+                margin-top: 0.5rem;
+              }
+              ul {
+                font-family: ui-sans-serif, system-ui, sans-serif;
+                padding-left: 1.2rem;
+              }
+              footer {
+                margin-top: 3rem;
+                color: var(--muted);
+                font-family: ui-sans-serif, system-ui, sans-serif;
+                font-size: 0.85rem;
+              }
+            </style>
+          </head>
+          <body>
+            <main>
+              <h1>VOTAR Threat Model</h1>
+              <p class="lead">
+                Modelado de amenazas generado con Threagile para la plataforma de votación
+                electrónica VOTAR (Equipo Five Stack – UTN FRVM).
+              </p>
+              <div class="actions">
+                <a class="btn" href="report.pdf">Descargar report.pdf</a>
+                <a class="btn secondary" href="risks.json">risks.json</a>
+                <a class="btn secondary" href="risks.xlsx">risks.xlsx</a>
+                <a class="btn secondary" href="technical-assets.json">technical-assets.json</a>
+                <a class="btn secondary" href="stats.json">stats.json</a>
+                <a class="btn secondary" href="tags.xlsx">tags.xlsx</a>
+              </div>
+
+              <section>
+                <h2>Data-flow diagram</h2>
+                <figure>
+                  <img src="data-flow-diagram.png" alt="Diagrama de flujo de datos VOTAR" />
+                  <figcaption>data-flow-diagram.png</figcaption>
+                </figure>
+              </section>
+
+              <section>
+                <h2>Data-asset diagram</h2>
+                <figure>
+                  <img src="data-asset-diagram.png" alt="Diagrama de activos de datos VOTAR" />
+                  <figcaption>data-asset-diagram.png</figcaption>
+                </figure>
+              </section>
+
+              <section>
+                <h2>Artefactos</h2>
+                <ul>
+                  <li><a href="report.pdf">report.pdf</a> — informe completo</li>
+                  <li><a href="risks.json">risks.json</a> / <a href="risks.xlsx">risks.xlsx</a></li>
+                  <li><a href="technical-assets.json">technical-assets.json</a></li>
+                  <li><a href="stats.json">stats.json</a> / <a href="tags.xlsx">tags.xlsx</a></li>
+                </ul>
+              </section>
+
+              <footer>
+                Generado automáticamente desde <code>threagile.yaml</code> vía GitHub Actions.
+              </footer>
+            </main>
+          </body>
+          </html>
+          EOF
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
