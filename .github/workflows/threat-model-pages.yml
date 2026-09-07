@@ -43,6 +43,7 @@ jobs:
         run: |
           mkdir -p dist tmp
           ./bin/threagile analyze-model \
+            --config threagile-config.yaml \
             --model threagile.yaml \
             --output dist \
             --app-dir . \
@@ -190,7 +191,7 @@ jobs:
                 <h2>Diagrama de flujo de datos</h2>
                 <figure>
                   <img src="data-flow-diagram.png" alt="Diagrama de flujo de datos VOTAR" />
-                  <figcaption>data-flow-diagram.png — incluye leyenda embebida</figcaption>
+                  <figcaption>data-flow-diagram.png</figcaption>
                 </figure>
                 <div class="legend">
                   <h3>Leyenda</h3>
@@ -209,7 +210,7 @@ jobs:
                 <h2>Diagrama de activos de datos</h2>
                 <figure>
                   <img src="data-asset-diagram.png" alt="Diagrama de activos de datos VOTAR" />
-                  <figcaption>data-asset-diagram.png — incluye leyenda embebida</figcaption>
+                  <figcaption>data-asset-diagram.png</figcaption>
                 </figure>
                 <div class="legend">
                   <h3>Leyenda</h3>
