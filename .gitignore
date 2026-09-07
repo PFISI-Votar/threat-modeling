@@ -38,3 +38,6 @@ stats.json
 /config.json
 /config.yaml
 /tmp/
+.venv-pdf/
+*.pdf.bak
+
