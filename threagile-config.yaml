@@ -12,6 +12,7 @@ ReportConfiguration:
     DataMapping: true
     ImpactRemainingRisks: true
 HideEmptyChapters: true
+AddLegend: true
 TempFolder: tmp
 AppFolder: .
 DataFolder: output

@@ -142,6 +142,22 @@ jobs:
                 color: var(--muted);
                 margin-top: 0.5rem;
               }
+              .legend {
+                background: #fff;
+                border: 1px solid var(--line);
+                padding: 0.85rem 1rem 0.35rem;
+                margin: -0.5rem 0 1.5rem;
+                font-family: ui-sans-serif, system-ui, sans-serif;
+                font-size: 0.9rem;
+              }
+              .legend h3 {
+                margin: 0 0 0.5rem;
+                font-size: 0.95rem;
+                color: var(--accent);
+              }
+              .legend ul {
+                margin: 0 0 0.75rem;
+              }
               ul {
                 font-family: ui-sans-serif, system-ui, sans-serif;
                 padding-left: 1.2rem;
@@ -174,16 +190,36 @@ jobs:
                 <h2>Diagrama de flujo de datos</h2>
                 <figure>
                   <img src="data-flow-diagram.png" alt="Diagrama de flujo de datos VOTAR" />
-                  <figcaption>data-flow-diagram.png</figcaption>
+                  <figcaption>data-flow-diagram.png — incluye leyenda embebida</figcaption>
                 </figure>
+                <div class="legend">
+                  <h3>Leyenda</h3>
+                  <ul>
+                    <li><strong>Formas:</strong> caja = entidad externa; elipse = proceso; cilindro = almacén de datos; octágono = usado como cliente.</li>
+                    <li><strong>Relleno:</strong> azul claro = Internet; gris claro = fuera de alcance; verde/cian = desarrollo a medida.</li>
+                    <li><strong>Título:</strong> rojo = mission-critical; ámbar = critical; negro = importante/otros.</li>
+                    <li><strong>Líneas:</strong> sólida = tráfico de negocio; discontinua = DevOps; punteada/rosa = sin datos o protocolo desconocido.</li>
+                    <li><strong>Color de enlace:</strong> rojo = strictly-confidential; ámbar = confidential; azul oscuro = VPN; marrón = IP filtrada.</li>
+                    <li><strong>RAA %:</strong> atractivo relativo para el atacante calculado por Threagile.</li>
+                  </ul>
+                </div>
               </section>
 
               <section>
                 <h2>Diagrama de activos de datos</h2>
                 <figure>
                   <img src="data-asset-diagram.png" alt="Diagrama de activos de datos VOTAR" />
-                  <figcaption>data-asset-diagram.png</figcaption>
+                  <figcaption>data-asset-diagram.png — incluye leyenda embebida</figcaption>
                 </figure>
+                <div class="legend">
+                  <h3>Leyenda</h3>
+                  <ul>
+                    <li><strong>Nodos de datos (izquierda):</strong> el color indica probabilidad de brecha (rojo/alto, ámbar/medio, verde/bajo, gris/sin potencial).</li>
+                    <li><strong>Activos técnicos (derecha):</strong> el color indica la severidad de riesgo más alta aún abierta.</li>
+                    <li><strong>Línea azul sólida:</strong> el activo técnico <em>almacena</em> ese dato.</li>
+                    <li><strong>Línea gris discontinua:</strong> el activo técnico <em>procesa</em> ese dato (sin almacenarlo).</li>
+                  </ul>
+                </div>
               </section>
 
               <section>

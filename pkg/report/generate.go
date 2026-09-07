@@ -172,7 +172,7 @@ func Generate(config reportConfigReader, readResult *model.ReadResult, commands 
 			gvFile = tmpFile.Name()
 			defer func() { _ = os.Remove(gvFile) }()
 		}
-		dotFile, err := WriteDataAssetDiagramGraphvizDOT(readResult.ParsedModel, gvFile, diagramDPI, progressReporter)
+		dotFile, err := WriteDataAssetDiagramGraphvizDOT(readResult.ParsedModel, gvFile, diagramDPI, config.GetAddLegend(), progressReporter)
 		if err != nil {
 			return fmt.Errorf("error while generating data asset diagram: %w", err)
 		}

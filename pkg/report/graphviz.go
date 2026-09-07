@@ -23,51 +23,7 @@ func WriteDataFlowDiagramGraphvizDOT(parsedModel *types.Model,
 	dotContent.WriteString("digraph generatedModel { concentrate=false \n")
 
 	if addLegend {
-		dotContent.WriteString("subgraph cluster_shape_legend { \n")
-		dotContent.WriteString("  label=\"Shape legend\"; \n")
-		dotContent.WriteString("  color=\"lightgrey\"; \n")
-		dotContent.WriteString("  style=\"dashed\"; \n")
-		dotContent.WriteString(makeLegendNode("external_entity_item", "External Entity", "0", "black", "box", "solid", "filled", "2.0", VeryLightGray, "1", Black))
-		dotContent.WriteString(makeLegendNode("process_item", "Process", "0", "black", "ellipse", "solid", "filled", "2.0", VeryLightGray, "1", Black))
-		dotContent.WriteString(makeLegendNode("datastore_item", "Datastore", "0", "black", "cylinder", "solid", "filled", "2.0", VeryLightGray, "1", Black))
-		dotContent.WriteString(makeLegendNode("used_as_client_item", "Used as client", "0", "black", "octagon", "solid", "filled", "2.0", VeryLightGray, "1", Black))
-		dotContent.WriteString("} \n")
-
-		dotContent.WriteString("subgraph cluster_tenant_legend { \n")
-		dotContent.WriteString("  label=\"Tenant legend\"; \n")
-		dotContent.WriteString("  color=\"lightgrey\"; \n")
-		dotContent.WriteString("  style=\"dashed\"; \n")
-		dotContent.WriteString(makeLegendNode("single_tenant", "Single tenant", "0", "black", "box", "solid", "filled", "2.0", VeryLightGray, "1", Black))
-		dotContent.WriteString(makeLegendNode("multi_tenant", "Multitenant", "1", "black", "box", "solid", "filled", "2.0", VeryLightGray, "1", Black))
-		dotContent.WriteString("} \n")
-
-		dotContent.WriteString("subgraph cluster_label_legend { \n")
-		dotContent.WriteString("  label=\"Label color legend\"; \n")
-		dotContent.WriteString("  color=\"lightgrey\"; \n")
-		dotContent.WriteString("  style=\"dashed\"; \n")
-		dotContent.WriteString(makeLegendNode("mission_critical", "Mission Critical Asset", "0", Red, "box", "solid", "filled", "3.0", VeryLightGray, "1", Red))
-		dotContent.WriteString(makeLegendNode("critical", "Critical Asset", "0", Amber, "box", "solid", "filled", "3.0", VeryLightGray, "1", Amber))
-		dotContent.WriteString(makeLegendNode("other", "Important and Other Assets", "0", Black, "box", "solid", "filled", "2.0", VeryLightGray, "1", Black))
-		dotContent.WriteString("} \n")
-
-		dotContent.WriteString("subgraph cluster_border_line_legend { \n")
-		dotContent.WriteString("  label=\"Label color legend\"; \n")
-		dotContent.WriteString("  color=\"lightgrey\"; \n")
-		dotContent.WriteString("  style=\"dashed\"; \n")
-		dotContent.WriteString(makeLegendNode("dotted", "Model forgery attempt", "0", Black, "box", "dotted ", "filled", "2.0", VeryLightGray, "1", Black))
-		dotContent.WriteString(makeLegendNode("solid", "Normal", "0", Black, "box", "solid", "filled", "2.0", VeryLightGray, "1", Black))
-		dotContent.WriteString("} \n")
-
-		dotContent.WriteString("subgraph cluster_fill_legend { \n")
-		dotContent.WriteString("  label=\"Shape fill legend (darker for physical machines, brighter for container and even more brighter for serverless\"; \n")
-		dotContent.WriteString("  color=\"lightgrey\"; \n")
-		dotContent.WriteString("  style=\"dashed\"; \n")
-		dotContent.WriteString(makeLegendNode("invalid_item", "No data processed or stored, or using unknown technology, or no communication links", "0", "black", "box", "solid", "filled", "2.0", LightPink, "1", Black))
-		dotContent.WriteString(makeLegendNode("internet", "Asset used over the internet", "0", "black", "box", "solid", "filled", "2.0", ExtremeLightBlue, "1", Black))
-		dotContent.WriteString(makeLegendNode("out_of_scope", "Out of scope", "0", "black", "box", "solid", "filled", "2.0", OutOfScopeFancy, "1", Black))
-		dotContent.WriteString(makeLegendNode("custom_developed_part", "Custom developed part", "0", "black", "box", "solid", "filled", "2.0", CustomDevelopedParts, "1", Black))
-		dotContent.WriteString(makeLegendNode("other_assets", "Other assets", "0", "black", "box", "solid", "filled", "2.0", VeryLightGray, "1", Black))
-		dotContent.WriteString("} \n")
+		dotContent.WriteString(dataFlowDiagramLegendDOT())
 	}
 
 	// Metadata init ===============================================================================
@@ -315,12 +271,93 @@ func WriteDataFlowDiagramGraphvizDOT(parsedModel *types.Model,
 	return file, nil
 }
 
+func dataFlowDiagramLegendDOT() string {
+	var b strings.Builder
+	b.WriteString("subgraph cluster_shape_legend { \n")
+	b.WriteString("  label=\"Leyenda de formas\"; \n")
+	b.WriteString("  color=\"lightgrey\"; \n")
+	b.WriteString("  style=\"dashed\"; \n")
+	b.WriteString(makeLegendNode("legend_external_entity", "Entidad externa", "0", "black", "box", "solid", "filled", "2.0", VeryLightGray, "1", Black))
+	b.WriteString(makeLegendNode("legend_process", "Proceso", "0", "black", "ellipse", "solid", "filled", "2.0", VeryLightGray, "1", Black))
+	b.WriteString(makeLegendNode("legend_datastore", "Almacen de datos", "0", "black", "cylinder", "solid", "filled", "2.0", VeryLightGray, "1", Black))
+	b.WriteString(makeLegendNode("legend_used_as_client", "Usado como cliente", "0", "black", "octagon", "solid", "filled", "2.0", VeryLightGray, "1", Black))
+	b.WriteString("} \n")
+
+	b.WriteString("subgraph cluster_fill_legend { \n")
+	b.WriteString("  label=\"Leyenda de relleno\"; \n")
+	b.WriteString("  color=\"lightgrey\"; \n")
+	b.WriteString("  style=\"dashed\"; \n")
+	b.WriteString(makeLegendNode("legend_internet", "Expuesto a Internet", "0", "black", "box", "solid", "filled", "2.0", ExtremeLightBlue, "1", Black))
+	b.WriteString(makeLegendNode("legend_out_of_scope", "Fuera de alcance", "0", "black", "box", "solid", "filled", "2.0", OutOfScopeFancy, "1", Black))
+	b.WriteString(makeLegendNode("legend_custom_dev", "Desarrollo a medida", "0", "black", "box", "solid", "filled", "2.0", CustomDevelopedParts, "1", Black))
+	b.WriteString(makeLegendNode("legend_other_assets", "Otros activos", "0", "black", "box", "solid", "filled", "2.0", VeryLightGray, "1", Black))
+	b.WriteString(makeLegendNode("legend_invalid_item", "Sin datos / tecnologia desconocida", "0", "black", "box", "solid", "filled", "2.0", LightPink, "1", Black))
+	b.WriteString("} \n")
+
+	b.WriteString("subgraph cluster_label_legend { \n")
+	b.WriteString("  label=\"Color del titulo (criticidad)\"; \n")
+	b.WriteString("  color=\"lightgrey\"; \n")
+	b.WriteString("  style=\"dashed\"; \n")
+	b.WriteString(makeLegendNode("legend_mission_critical", "Mission-critical", "0", Red, "box", "solid", "filled", "3.0", VeryLightGray, "1", Red))
+	b.WriteString(makeLegendNode("legend_critical", "Critical", "0", Amber, "box", "solid", "filled", "3.0", VeryLightGray, "1", Amber))
+	b.WriteString(makeLegendNode("legend_other_label", "Importante / otros", "0", Black, "box", "solid", "filled", "2.0", VeryLightGray, "1", Black))
+	b.WriteString("} \n")
+
+	b.WriteString("subgraph cluster_border_legend { \n")
+	b.WriteString("  label=\"Borde del activo\"; \n")
+	b.WriteString("  color=\"lightgrey\"; \n")
+	b.WriteString("  style=\"dashed\"; \n")
+	b.WriteString(makeLegendNode("legend_border_solid", "Normal", "0", Black, "box", "solid", "filled", "2.0", VeryLightGray, "1", Black))
+	b.WriteString(makeLegendNode("legend_border_dotted", "Posible inconsistencia del modelo", "0", Black, "box", "dotted", "filled", "2.0", VeryLightGray, "1", Black))
+	b.WriteString(makeLegendNode("legend_multi_tenant", "Multi-tenant (doble borde)", "1", "black", "box", "solid", "filled", "2.0", VeryLightGray, "2", Black))
+	b.WriteString("} \n")
+
+	b.WriteString("subgraph cluster_edge_legend { \n")
+	b.WriteString("  label=\"Leyenda de enlaces de comunicacion\"; \n")
+	b.WriteString("  color=\"lightgrey\"; \n")
+	b.WriteString("  style=\"dashed\"; \n")
+	b.WriteString("  legend_e1 [shape=point width=0.1]; legend_e2 [shape=point width=0.1];\n")
+	b.WriteString("  legend_e3 [shape=point width=0.1]; legend_e4 [shape=point width=0.1];\n")
+	b.WriteString("  legend_e5 [shape=point width=0.1]; legend_e6 [shape=point width=0.1];\n")
+	b.WriteString("  legend_e7 [shape=point width=0.1]; legend_e8 [shape=point width=0.1];\n")
+	b.WriteString("  legend_e9 [shape=point width=0.1]; legend_e10 [shape=point width=0.1];\n")
+	b.WriteString("  legend_e11 [shape=point width=0.1]; legend_e12 [shape=point width=0.1];\n")
+	b.WriteString(`  legend_e1 -> legend_e2 [xlabel="Solida: trafico de negocio con datos" style="solid" color="` + Black + `" fontcolor="` + Gray + `"];` + "\n")
+	b.WriteString(`  legend_e3 -> legend_e4 [xlabel="Discontinua: uso DevOps" style="dashed" color="` + MiddleLightGray + `" fontcolor="` + Gray + `"];` + "\n")
+	b.WriteString(`  legend_e5 -> legend_e6 [xlabel="Punteada: sin datos / protocolo desconocido" style="dotted" color="` + Pink + `" fontcolor="` + Gray + `"];` + "\n")
+	b.WriteString(`  legend_e7 -> legend_e8 [xlabel="Roja: datos strictly-confidential" style="solid" color="` + Red + `" fontcolor="` + Gray + `"];` + "\n")
+	b.WriteString(`  legend_e9 -> legend_e10 [xlabel="Ambar: datos confidential" style="solid" color="` + Amber + `" fontcolor="` + Gray + `"];` + "\n")
+	b.WriteString(`  legend_e11 -> legend_e12 [xlabel="Azul oscuro: VPN / Marron: IP filtrada" style="solid" color="` + DarkBlue + `" fontcolor="` + Gray + `"];` + "\n")
+	b.WriteString("} \n")
+	return b.String()
+}
+
+func dataAssetDiagramLegendDOT() string {
+	var b strings.Builder
+	b.WriteString("subgraph cluster_data_asset_legend { \n")
+	b.WriteString("  label=\"Leyenda del diagrama de activos de datos\"; \n")
+	b.WriteString("  color=\"lightgrey\"; \n")
+	b.WriteString("  style=\"dashed\"; \n")
+	b.WriteString("  fontname=\"Verdana\"; \n")
+	b.WriteString(`  legend_da_high [label="Activo de datos\nbrecha probable" style="filled" fillcolor="` + rgbHexColorHighRisk() + `" fontcolor="white" color="` + rgbHexColorHighRisk() + `"];` + "\n")
+	b.WriteString(`  legend_da_med [label="Activo de datos\nbrecha posible" style="filled" fillcolor="` + rgbHexColorMediumRisk() + `" fontcolor="white" color="` + rgbHexColorMediumRisk() + `"];` + "\n")
+	b.WriteString(`  legend_da_low [label="Activo de datos\nbrecha improbable" style="filled" fillcolor="` + rgbHexColorLowRisk() + `" fontcolor="white" color="` + rgbHexColorLowRisk() + `"];` + "\n")
+	b.WriteString(`  legend_da_none [label="Activo de datos\nsin potencial de brecha" style="filled" fillcolor="#444444" fontcolor="white" color="#444444"];` + "\n")
+	b.WriteString(`  legend_ta [label="Activo tecnico\n(color = severidad de riesgo)" style="filled" shape=box fillcolor="` + VeryLightGray + `" fontcolor="black" color="black"];` + "\n")
+	b.WriteString("  legend_link_s1 [shape=point width=0.1]; legend_link_s2 [shape=point width=0.1];\n")
+	b.WriteString("  legend_link_p1 [shape=point width=0.1]; legend_link_p2 [shape=point width=0.1];\n")
+	b.WriteString(`  legend_link_s1 -> legend_link_s2 [xlabel="Linea azul solida: datos almacenados por el activo" style="solid" color="blue" fontcolor="#333333"];` + "\n")
+	b.WriteString(`  legend_link_p1 -> legend_link_p2 [xlabel="Linea gris discontinua: datos procesados por el activo" style="dashed" color="#666666" fontcolor="#333333"];` + "\n")
+	b.WriteString("} \n")
+	return b.String()
+}
+
 func makeLegendNode(id, title, compartmentBorder, labelColor, shape, borderLineStyle, shapeStyle, borderPenWidth, shapeFillColor, shapePeripheries, shapeBorderColor string) string {
-	return "  " + id + ` [
-label=<<table border="0" cellborder="` + compartmentBorder + `" cellpadding="2" cellspacing="0"><tr><td><font point-size="15" color="` + DarkBlue + `">list of technologies` + `</font><br/><font point-size="15" color="` + LightGray + `">technical asset size</font></td></tr><tr><td><b><font color="` + labelColor + `">` + encode(title) + `</font></b><br/></td></tr><tr><td>attacker attractiveness level</td></tr></table>>
-shape=` + shape + ` style="` + borderLineStyle + `,` + shapeStyle + `" penwidth="` + borderPenWidth + `" fillcolor="` + shapeFillColor + `"
-peripheries=` + shapePeripheries + `
-color="` + shapeBorderColor + "\"\n  ]; "
+	_ = compartmentBorder
+	return "  " + id + ` [label="` + encode(title) + `" shape=` + shape +
+		` style="` + borderLineStyle + `,` + shapeStyle + `" penwidth="` + borderPenWidth +
+		`" fillcolor="` + shapeFillColor + `" fontcolor="` + labelColor +
+		`" peripheries=` + shapePeripheries + ` color="` + shapeBorderColor + "\"];\n"
 }
 
 // Pen Widths:
@@ -517,11 +554,15 @@ func makeDiagramInvisibleConnectionsTweaks(parsedModel *types.Model) (string, er
 }
 
 func WriteDataAssetDiagramGraphvizDOT(parsedModel *types.Model, diagramFilenameDOT string, dpi int,
-	progressReporter progressReporter) (*os.File, error) {
+	addLegend bool, progressReporter progressReporter) (*os.File, error) {
 	progressReporter.Info("Writing data asset diagram input")
 
 	var dotContent strings.Builder
 	dotContent.WriteString("digraph generatedModel { concentrate=true \n")
+
+	if addLegend {
+		dotContent.WriteString(dataAssetDiagramLegendDOT())
+	}
 
 	// Metadata init ===============================================================================
 	dotContent.WriteString(`	graph [

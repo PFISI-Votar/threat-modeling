@@ -209,7 +209,7 @@ func (c *Config) Defaults(buildTimestamp string) *Config {
 		BackupHistoryFilesToKeepValue: DefaultBackupHistoryFilesToKeep,
 
 		AddModelTitleValue:              false,
-		AddLegendValue:                  false,
+		AddLegendValue:                  true,
 		KeepDiagramSourceFilesValue:     false,
 		IgnoreOrphanedRiskTrackingValue: false,
 
