@@ -47,6 +47,11 @@ questions:
   El RPC provider (Alchemy/Infura/QuickNode) está bajo SLA y controles contractuales adecuados?: ""
   Existe rotación y HSM/vault para secretos operativos del backend?: ""
   El reverse proxy de producción fuerza HTTPS y cabeceras alineadas a VOTAR-381?: ""
+  El calldata publico de castSignedVote vincula voterLeaf con candidateIds - se planea mitigar con ZK proofs?: ""
+  La wallet transmisora (VITE_PRIVATE_KEY) esta expuesta en el bundle del cliente - se planea migrar a Relayer backend?: ""
+  El seed del wallet efimero en localStorage se planea cifrar o proteger?: ""
+  Existe runbook documentado para re-deploy de emergencia via ElectionFactory?: ""
+  Se evaluo Redis para rate limiting en caso de despliegue multi-replica?: ""
 
 
 abuse_cases:
@@ -74,6 +79,39 @@ abuse_cases:
   Falsificación de resultados públicos: >
     Como atacante quiero presentar escrutinio alterado (off-chain) respecto del estado canónico
     on-chain para dañar la confianza ciudadana.
+  Extraccion de clave transmisora del bundle cliente: >-
+    Como atacante quiero extraer VITE_PRIVATE_KEY del bundle JavaScript de la BUD
+    compilado por Vite para drenar el gas de la wallet transmisora y causar DoS
+    total del sistema de votación (hallazgo: constants.ts del frontend).
+  Vinculacion identidad-voto via localStorage: >-
+    Como atacante con acceso al dispositivo del votante quiero leer el seed
+    almacenado en localStorage (votar:vote-seed) para derivar la clave efímera
+    y el nullifier, vinculando la identidad SSO con el voto on-chain.
+  Censura selectiva de votantes via Merkle proof: >-
+    Como backend comprometido quiero servir Merkle proofs inválidos a votantes
+    específicos para censurarlos, dado que la BUD no verifica el proof contra
+    la raíz on-chain antes de transmitir.
+  Vinculacion identidad-voto via calldata publica: >-
+    Como observador pasivo de la blockchain quiero analizar el calldata de
+    castSignedVote para correlacionar voterLeaf con candidateIds y romper
+    el anonimato del voto.
+  Compromiso de VALIDATOR_PRIVATE_KEY: >-
+    Como atacante quiero comprometer la clave del VALIDATOR_ROLE custodiada
+    por el backend para generar certificados de validación EIP-712 fraudulentos
+    que habiliten votos sin Merkle proof legítimo.
+  Exfiltracion de PII del padron via sessionStorage: >-
+    Como atacante con XSS o acceso al dispositivo quiero leer sessionStorage
+    (padron-preview) para obtener DNI y email de votantes durante la importación
+    CSV del padrón (violación Ley 25.326).
+  Bypass de rate limiting en despliegue horizontal: >-
+    Como atacante quiero explotar que el rate limiter del backend es in-memory
+    y en despliegue multi-réplica los límites se multiplican por instancia.
+  Explotacion de ventana de re-voto: >-
+    Como atacante quiero explotar minIntervalSeconds insuficiente o maxVotesPerVoter
+    para forzar re-votación masiva automatizada.
+  Manipulacion del RPC Failover: >-
+    Como atacante quiero comprometer o saturar los proveedores RPC para forzar
+    el fallback a un nodo malicioso que altere lecturas de estado on-chain.
 
 
 security_requirements:
@@ -84,6 +122,14 @@ security_requirements:
   Hardening web: Cabeceras de seguridad (CSP, HSTS, etc.) en interfaces expuestas (VOTAR-381).
   Secretos operativos: Claves de cadena y JWT material nunca en el frontend; custodia en backend/ops.
   LAST_VOTE_WINS: La política de re-voto debe aplicarse de forma consistente off-chain y on-chain.
+  Clave transmisora fuera del cliente: La wallet que paga gas (VITE_PRIVATE_KEY) no debe exponerse en el bundle JavaScript. Implementar Relayer backend o EIP-4337.
+  Proteccion del seed efimero: El seed del wallet efímero en localStorage debe cifrarse con clave derivada de la sesión del usuario.
+  Proteccion de calldata on-chain: Mientras no se implemente ZK-SNARKs o cifrado de boleta, el riesgo de vinculación identidad-voto vía blockchain explorer está presente.
+  Custodia HSM de claves operativas: VALIDATOR_PRIVATE_KEY y PRIVATE_KEY deben custodiarse en HSM o Cloud KMS, no en variables de entorno.
+  Verificacion local de Merkle proof: La BUD debe verificar el Merkle proof contra la raíz on-chain publicada antes de transmitir.
+  Plan de contingencia contractual: Los contratos son no-upgradeables. Debe existir un runbook operativo para re-deploy de emergencia vía ElectionFactory.
+  Rate limiter centralizado: En despliegues multi-réplica el rate limiter in-memory debe reemplazarse por Redis.
+  PII fuera de sessionStorage: La previsualización del padrón CSV no debe serializar datos personales sin hashear en sessionStorage.
 
 
 tags_available:
@@ -403,6 +449,100 @@ data_assets:
     justification_cia_rating: Metadatos de anclaje; integridad importante para trazabilidad.
 
 
+  Firmas EIP-712:
+    id: da-eip712-signatures
+    description: >-
+      Firmas criptográficas EIP-712 typed data generadas por el votante (Vote struct) y
+      el validador institucional (Validation struct) para castSignedVote en BallotContract.
+    usage: business
+    tags:
+      - ethereum-sepolia
+      - e2e-verifiability
+    origin: BUD / API NestJS
+    owner: Votante / Equipo Five Stack
+    quantity: many
+    confidentiality: strictly-confidential
+    integrity: mission-critical
+    availability: critical
+    justification_cia_rating: >-
+      Material criptográfico que autoriza el sufragio; compromiso permite suplantación.
+
+
+  Configuracion RevoteConfig:
+    id: da-revote-config
+    description: >-
+      Parámetros inmutables de re-voto almacenados on-chain por ElectionFactory:
+      maxVotesPerVoter, minIntervalSeconds, tallyPolicy (LAST_VOTE_WINS), revoteEnabled.
+    usage: business
+    tags:
+      - ethereum-sepolia
+    origin: ElectionFactory / Autoridad Electoral
+    owner: Autoridad Electoral
+    quantity: few
+    confidentiality: public
+    integrity: critical
+    availability: critical
+    justification_cia_rating: >-
+      Define reglas de re-voto; manipulación altera la política electoral.
+
+
+  Hash de Seleccion:
+    id: da-selection-hash
+    description: >-
+      Keccak-256 del JSON normalizado de candidatos seleccionados (selectionHash).
+      Viaja en calldata de castSignedVote y en el evento SignedVoteCast.
+    usage: business
+    tags:
+      - e2e-verifiability
+    origin: BUD
+    owner: Votante
+    quantity: many
+    confidentiality: restricted
+    integrity: critical
+    availability: operational
+    justification_cia_rating: >-
+      Vincula la selección del votante al voto on-chain; visible en calldata pública.
+
+
+  Clave Transmisora Gas:
+    id: da-transmitter-key
+    description: >-
+      Clave privada de la wallet que paga gas para transacciones de voto (VITE_PRIVATE_KEY).
+      Actualmente expuesta en el bundle JavaScript del frontend compilado por Vite.
+    usage: business
+    tags:
+      - ethereum-sepolia
+    origin: Operaciones VOTAR
+    owner: Equipo Five Stack
+    quantity: very-few
+    confidentiality: strictly-confidential
+    integrity: critical
+    availability: critical
+    justification_cia_rating: >-
+      Compromiso permite drenar gas y causar DoS total del sistema de votación.
+      Hallazgo crítico: expuesta en src/features/voto/crypto/constants.ts.
+
+
+  Seed Wallet Efimero:
+    id: da-ephemeral-seed
+    description: >-
+      Seed de 32 bytes almacenado en localStorage del navegador del votante
+      (votar:vote-seed:<idEleccion>:<sub>). Se usa para derivar determinísticamente
+      la clave efímera secp256k1 y el nullifier del voto.
+    usage: business
+    tags:
+      - e2e-verifiability
+    origin: BUD (Web Crypto API)
+    owner: Votante
+    quantity: many
+    confidentiality: strictly-confidential
+    integrity: mission-critical
+    availability: important
+    justification_cia_rating: >-
+      Compromiso del dispositivo permite derivar nullifier y vincular identidad con voto.
+      Hallazgo: almacenado sin cifrar en localStorage.
+
+
 technical_assets:
 
   Browser Usuario:
@@ -523,8 +663,14 @@ technical_assets:
       - da-votes-onchain
       - da-vote-receipt
       - da-election-config
+      - da-eip712-signatures
+      - da-selection-hash
+      - da-transmitter-key
+      - da-ephemeral-seed
     data_assets_stored:
       - da-ephemeral-keys
+      - da-ephemeral-seed
+      - da-transmitter-key
     data_formats_accepted:
       - json
     communication_links:
@@ -581,6 +727,9 @@ technical_assets:
           - da-votes-onchain
           - da-ephemeral-keys
           - da-validation-credential
+          - da-transmitter-key
+          - da-eip712-signatures
+          - da-selection-hash
         data_assets_received:
           - da-votes-onchain
           - da-vote-receipt
@@ -592,6 +741,8 @@ technical_assets:
     description: >
       SPA React de gestión electoral (padrón CSV, configuración, publicación Merkle, ciclo de vida).
       Autenticación admin JWT + TOTP. In-scope como aplicación custom.
+      Hallazgo: durante la previsualización del padrón CSV se serializa PII (DNI, email) en
+      sessionStorage (padron-preview) sin hashear — ver abuse case y requisito de seguridad asociados.
     type: process
     usage: business
     used_as_client_by_human: true
@@ -755,6 +906,8 @@ technical_assets:
       - da-audit-log
       - da-db-backups
       - da-blockchain-index
+      - da-eip712-signatures
+      - da-revote-config
     data_assets_stored:
     data_formats_accepted:
       - json
@@ -821,6 +974,8 @@ technical_assets:
           - da-merkle-root-onchain
           - da-ops-keys
           - da-election-config
+          - da-eip712-signatures
+          - da-revote-config
         data_assets_received:
           - da-merkle-root-onchain
           - da-votes-onchain
@@ -1032,6 +1187,9 @@ technical_assets:
       - da-merkle-root-onchain
       - da-validation-credential
       - da-ops-keys
+      - da-eip712-signatures
+      - da-revote-config
+      - da-selection-hash
     data_assets_stored:
       - da-votes-onchain
       - da-merkle-root-onchain
@@ -1152,7 +1310,19 @@ shared_runtimes:
       - nestjs
     technical_assets_running:
       - api-nestjs
-
+report_configuration:
+  hide_chapter:
+    RiskRulesCheckedByThreagile: true
+    TagListing: true
+    SharedRuntimes: true
+    AssetRegister: true
+    RisksByTechnicalAsset: true
+    DataBreachProbabilities: true
+    STRIDEClassification: true
+    AssignmentByFunction: true
+    RAAAnalysis: true
+    DataMapping: true
+    ImpactRemainingRisks: true
 
 individual_risk_categories:
 

@@ -1,0 +1,18 @@
+ReportConfiguration:
+  HideChapter:
+    RiskRulesCheckedByThreagile: true
+    TagListing: true
+    SharedRuntimes: true
+    AssetRegister: true
+    RisksByTechnicalAsset: true
+    DataBreachProbabilities: true
+    STRIDEClassification: true
+    AssignmentByFunction: true
+    RAAAnalysis: true
+    DataMapping: true
+    ImpactRemainingRisks: true
+HideEmptyChapters: true
+TempFolder: tmp
+AppFolder: .
+DataFolder: output
+PluginFolder: .

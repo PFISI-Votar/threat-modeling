@@ -34,6 +34,8 @@ type pdfReporter struct {
 	tocLinkIdByAssetId            map[string]int
 	homeLink                      int
 	currentChapterTitleBreadcrumb string
+	hideChapters                  map[ChaptersToShowHide]bool
+	uni                           func(string) string
 
 	riskRules types.RiskRules
 }
@@ -73,8 +75,14 @@ func (r *pdfReporter) WriteReportPDF(reportFilename string,
 		}
 	}()
 
+	if hideChapters == nil {
+		hideChapters = make(map[ChaptersToShowHide]bool)
+	}
+	r.hideChapters = hideChapters
+
 	r.initReport()
 	r.createPdfAndInitMetadata(model)
+	r.uni = r.pdf.UnicodeTranslatorFromDescriptor("")
 	r.parseBackgroundTemplate(templateFilename)
 	r.createCover(model)
 	r.createTableOfContents(model)
@@ -90,7 +98,9 @@ func (r *pdfReporter) WriteReportPDF(reportFilename string,
 	if val := hideChapters[AssetRegister]; !val {
 		r.createAssetRegister(model)
 	}
-	r.createImpactRemainingRisks(model)
+	if val := hideChapters[ImpactRemainingRisks]; !val {
+		r.createImpactRemainingRisks(model)
+	}
 	err = r.createTargetDescription(model, filepath.Dir(modelFilename))
 	if err != nil {
 		return fmt.Errorf("error creating target description: %w", err)
@@ -98,20 +108,43 @@ func (r *pdfReporter) WriteReportPDF(reportFilename string,
 	r.embedDataFlowDiagram(dataFlowDiagramFilenamePNG, tempFolder)
 	r.createSecurityRequirements(model)
 	r.createAbuseCases(model)
-	r.createTagListing(model)
-	r.createSTRIDE(model)
-	r.createAssignmentByFunction(model)
-	r.createRAA(model, introTextRAA)
-	r.embedDataRiskMapping(dataAssetDiagramFilenamePNG, tempFolder)
+	if val := hideChapters[TagListing]; !val {
+		r.createTagListing(model)
+	}
+	if val := hideChapters[STRIDEClassification]; !val {
+		r.createSTRIDE(model)
+	}
+	if val := hideChapters[AssignmentByFunction]; !val {
+		r.createAssignmentByFunction(model)
+	}
+	if val := hideChapters[RAAAnalysis]; !val {
+		r.createRAA(model, introTextRAA)
+	}
+	if val := hideChapters[DataMapping]; !val {
+		r.embedDataRiskMapping(dataAssetDiagramFilenamePNG, tempFolder)
+	}
 	//createDataRiskQuickWins()
-	r.createOutOfScopeAssets(model)
-	r.createModelFailures(model)
-	r.createQuestions(model)
+	if len(model.OutOfScopeTechnicalAssets()) > 0 {
+		r.createOutOfScopeAssets(model)
+	}
+	modelFailures := flattenRiskSlice(filterByModelFailures(model, model.GeneratedRisksByCategory))
+	if len(modelFailures) > 0 {
+		r.createModelFailures(model)
+	}
+	if len(model.Questions) > 0 {
+		r.createQuestions(model)
+	}
 	r.createRiskCategories(model)
-	r.createTechnicalAssets(model)
-	r.createDataAssets(model)
+	if val := hideChapters[RisksByTechnicalAsset]; !val {
+		r.createTechnicalAssets(model)
+	}
+	if val := hideChapters[DataBreachProbabilities]; !val {
+		r.createDataAssets(model)
+	}
 	r.createTrustBoundaries(model)
-	r.createSharedRuntimes(model)
+	if val := hideChapters[SharedRuntimes]; !val {
+		r.createSharedRuntimes(model)
+	}
 	if val := hideChapters[RiskRulesCheckedByThreagile]; !val {
 		r.createRiskRulesChecked(model, modelFilename, skipRiskRules, buildTimestamp, threagileVersion, modelHash, customRiskRules)
 	}
@@ -125,10 +158,11 @@ func (r *pdfReporter) WriteReportPDF(reportFilename string,
 
 func (r *pdfReporter) createPdfAndInitMetadata(model *types.Model) {
 	r.pdf = gofpdf.New("P", "mm", "A4", "")
+	r.uni = r.pdf.UnicodeTranslatorFromDescriptor("")
 	r.pdf.SetCreator(model.Author.Homepage, true)
 	r.pdf.SetAuthor(model.Author.Name, true)
-	r.pdf.SetTitle("Threat Model Report: "+model.Title, true)
-	r.pdf.SetSubject("Threat Model Report: "+model.Title, true)
+	r.pdf.SetTitle(r.tr("Reporte de Modelo de Amenazas: ")+r.tr(model.Title), true)
+	r.pdf.SetSubject(r.tr("Reporte de Modelo de Amenazas: ")+r.tr(model.Title), true)
 	//	r.pdf.SetPageBox("crop", 0, 0, 100, 010)
 	r.pdf.SetHeaderFunc(func() {
 		if r.isLandscapePage {
@@ -142,10 +176,10 @@ func (r *pdfReporter) createPdfAndInitMetadata(model *types.Model) {
 		r.addBreadcrumb(model)
 		r.pdf.SetFont("Helvetica", "", 10)
 		r.pdf.SetTextColor(127, 127, 127)
-		r.pdf.Text(8.6, 284, "Threat Model Report via Threagile") //: "+parsedModel.Title)
+		r.pdf.Text(8.6, 284, r.tr("Reporte de Modelo de Amenazas via Threagile")) //: "+parsedModel.Title)
 		r.pdf.Link(8.4, 281, 54.6, 4, r.homeLink)
 		r.pageNo++
-		text := "Page " + strconv.Itoa(r.pageNo)
+		text := r.tr("Página ") + strconv.Itoa(r.pageNo)
 		if r.pageNo < 10 {
 			text = "    " + text
 		} else if r.pageNo < 100 {
@@ -189,14 +223,14 @@ func (r *pdfReporter) createCover(parsedModel *types.Model) {
 	gofpdi.UseImportedTemplate(r.pdf, r.coverTemplateId, 0, 0, 0, 300)
 	r.pdf.SetFont("Helvetica", "B", 28)
 	r.pdf.SetTextColor(0, 0, 0)
-	r.pdf.Text(40, 110, "Threat Model Report")
+	r.pdf.Text(40, 110, r.tr("Reporte de Modelo de Amenazas"))
 	r.pdf.Text(40, 125, uni(parsedModel.Title))
 	r.pdf.SetFont("Helvetica", "", 12)
 	reportDate := parsedModel.Date
 	if reportDate.IsZero() {
 		reportDate = types.Date{Time: time.Now()}
 	}
-	r.pdf.Text(40.7, 145, reportDate.Format("2 January 2006"))
+	r.pdf.Text(40.7, 145, r.tr(formatSpanishDate(reportDate.Time)))
 	r.pdf.Text(40.7, 153, uni(parsedModel.Author.Name))
 	r.pdf.SetFont("Helvetica", "", 10)
 	r.pdf.SetTextColor(80, 80, 80)
@@ -208,12 +242,12 @@ func (r *pdfReporter) createCover(parsedModel *types.Model) {
 func (r *pdfReporter) createTableOfContents(parsedModel *types.Model) {
 	uni := r.pdf.UnicodeTranslatorFromDescriptor("")
 	r.pdf.AddPage()
-	r.currentChapterTitleBreadcrumb = "Table of Contents"
+	r.currentChapterTitleBreadcrumb = r.tr("Índice")
 	r.homeLink = r.pdf.AddLink()
 	r.defineLinkTarget("{home}")
 	gofpdi.UseImportedTemplate(r.pdf, r.contentTemplateId, 0, 0, 0, 300)
 	r.pdf.SetFont("Helvetica", "B", fontSizeHeadline)
-	r.pdf.Text(11, 40, "Table of Contents")
+	r.pdf.Text(11, 40, r.tr("Índice"))
 	r.pdf.SetFont("Helvetica", "", fontSizeBody)
 	r.pdf.SetY(46)
 
@@ -225,107 +259,107 @@ func (r *pdfReporter) createTableOfContents(parsedModel *types.Model) {
 
 	var y float64 = 50
 	r.pdf.SetFont("Helvetica", "B", fontSizeBody)
-	r.pdf.Text(11, y, "Results Overview")
+	r.pdf.Text(11, y, r.tr("Resumen de Resultados"))
 	r.pdf.SetFont("Helvetica", "", fontSizeBody)
 
 	y += 6
-	r.pdf.Text(11, y, "    "+"Management Summary")
+	r.pdf.Text(11, y, r.tr("    Resumen Ejecutivo"))
 	r.pdf.Text(175, y, "{management-summary}")
 	r.pdf.Line(15.6, y+1.3, 11+171.5, y+1.3)
 	r.pdf.Link(10, y-5, 172.5, 6.5, r.pdf.AddLink())
 
-	risksStr := "Risks"
-	catStr := "Categories"
+	risksStr := "Riesgos"
+	catStr := "Categorías"
 	count, catCount := totalRiskCount(parsedModel), len(parsedModel.GeneratedRisksByCategory)
 	if count == 1 {
-		risksStr = "Risk"
+		risksStr = "Riesgo"
 	}
 	if catCount == 1 {
-		catStr = "category"
+		catStr = "categoría"
 	}
 	y += 6
-	r.pdf.Text(11, y, "    "+"Impact Analysis of "+strconv.Itoa(count)+" Initial "+risksStr+" in "+strconv.Itoa(catCount)+" "+catStr)
+	r.pdf.Text(11, y, r.tr("    Análisis de Impacto de ")+strconv.Itoa(count)+" "+r.tr(risksStr)+" "+r.tr("Iniciales en ")+strconv.Itoa(catCount)+" "+r.tr(catStr))
 	r.pdf.Text(175, y, "{impact-analysis-initial-risks}")
 	r.pdf.Line(15.6, y+1.3, 11+171.5, y+1.3)
 	r.pdf.Link(10, y-5, 172.5, 6.5, r.pdf.AddLink())
 
 	y += 6
-	r.pdf.Text(11, y, "    "+"Risk Mitigation")
+	r.pdf.Text(11, y, r.tr("    Mitigación de Riesgos"))
 	r.pdf.Text(175, y, "{risk-mitigation-status}")
 	r.pdf.Line(15.6, y+1.3, 11+171.5, y+1.3)
 	r.pdf.Link(10, y-5, 172.5, 6.5, r.pdf.AddLink())
 
 	y += 6
-	r.pdf.Text(11, y, "    "+"Asset Register")
+	r.pdf.Text(11, y, r.tr("    Registro de Activos"))
 	r.pdf.Text(175, y, "{asset-register}")
 	r.pdf.Line(15.6, y+1.3, 11+171.5, y+1.3)
 	r.pdf.Link(10, y-5, 172.5, 6.5, r.pdf.AddLink())
 
 	y += 6
-	risksStr = "Risks"
-	catStr = "Categories"
+	risksStr = "Riesgos"
+	catStr = "Categorías"
 	count, catCount = len(filteredByStillAtRisk(parsedModel)), len(reduceToOnlyStillAtRisk(parsedModel.GeneratedRisksByCategoryWithCurrentStatus()))
 	if count == 1 {
-		risksStr = "Risk"
+		risksStr = "Riesgo"
 	}
 	if catCount == 1 {
-		catStr = "category"
+		catStr = "categoría"
 	}
-	r.pdf.Text(11, y, "    "+"Impact Analysis of "+strconv.Itoa(count)+" Remaining "+risksStr+" in "+strconv.Itoa(catCount)+" "+catStr)
+	r.pdf.Text(11, y, r.tr("    Análisis de Impacto de ")+strconv.Itoa(count)+" "+r.tr(risksStr)+" "+r.tr("Restantes en ")+strconv.Itoa(catCount)+" "+r.tr(catStr))
 	r.pdf.Text(175, y, "{impact-analysis-remaining-risks}")
 	r.pdf.Line(15.6, y+1.3, 11+171.5, y+1.3)
 	r.pdf.Link(10, y-5, 172.5, 6.5, r.pdf.AddLink())
 
 	y += 6
-	r.pdf.Text(11, y, "    "+"Application Overview")
+	r.pdf.Text(11, y, r.tr("    Descripción de la Aplicación"))
 	r.pdf.Text(175, y, "{target-overview}")
 	r.pdf.Line(15.6, y+1.3, 11+171.5, y+1.3)
 	r.pdf.Link(10, y-5, 172.5, 6.5, r.pdf.AddLink())
 
 	y += 6
-	r.pdf.Text(11, y, "    "+"Data-Flow Diagram")
+	r.pdf.Text(11, y, r.tr("    Diagrama de Flujo de Datos"))
 	r.pdf.Text(175, y, "{data-flow-diagram}")
 	r.pdf.Line(15.6, y+1.3, 11+171.5, y+1.3)
 	r.pdf.Link(10, y-5, 172.5, 6.5, r.pdf.AddLink())
 
 	y += 6
-	r.pdf.Text(11, y, "    "+"Security Requirements")
+	r.pdf.Text(11, y, r.tr("    Requisitos de Seguridad"))
 	r.pdf.Text(175, y, "{security-requirements}")
 	r.pdf.Line(15.6, y+1.3, 11+171.5, y+1.3)
 	r.pdf.Link(10, y-5, 172.5, 6.5, r.pdf.AddLink())
 
 	y += 6
-	r.pdf.Text(11, y, "    "+"Abuse Cases")
+	r.pdf.Text(11, y, r.tr("    Casos de Abuso"))
 	r.pdf.Text(175, y, "{abuse-cases}")
 	r.pdf.Line(15.6, y+1.3, 11+171.5, y+1.3)
 	r.pdf.Link(10, y-5, 172.5, 6.5, r.pdf.AddLink())
 
 	y += 6
-	r.pdf.Text(11, y, "    "+"Tag Listing")
+	r.pdf.Text(11, y, r.tr("    Listado de Etiquetas"))
 	r.pdf.Text(175, y, "{tag-listing}")
 	r.pdf.Line(15.6, y+1.3, 11+171.5, y+1.3)
 	r.pdf.Link(10, y-5, 172.5, 6.5, r.pdf.AddLink())
 
 	y += 6
-	r.pdf.Text(11, y, "    "+"STRIDE Classification of Identified Risks")
+	r.pdf.Text(11, y, r.tr("    Clasificación STRIDE de Riesgos Identificados"))
 	r.pdf.Text(175, y, "{stride}")
 	r.pdf.Line(15.6, y+1.3, 11+171.5, y+1.3)
 	r.pdf.Link(10, y-5, 172.5, 6.5, r.pdf.AddLink())
 
 	y += 6
-	r.pdf.Text(11, y, "    "+"Assignment by Function")
+	r.pdf.Text(11, y, r.tr("    Asignación por Función"))
 	r.pdf.Text(175, y, "{function-assignment}")
 	r.pdf.Line(15.6, y+1.3, 11+171.5, y+1.3)
 	r.pdf.Link(10, y-5, 172.5, 6.5, r.pdf.AddLink())
 
 	y += 6
-	r.pdf.Text(11, y, "    "+"RAA Analysis")
+	r.pdf.Text(11, y, r.tr("    Análisis RAA"))
 	r.pdf.Text(175, y, "{raa-analysis}")
 	r.pdf.Line(15.6, y+1.3, 11+171.5, y+1.3)
 	r.pdf.Link(10, y-5, 172.5, 6.5, r.pdf.AddLink())
 
 	y += 6
-	r.pdf.Text(11, y, "    "+"Data Mapping")
+	r.pdf.Text(11, y, r.tr("    Mapeo de Datos"))
 	r.pdf.Text(175, y, "{data-risk-mapping}")
 	r.pdf.Line(15.6, y+1.3, 11+171.5, y+1.3)
 	r.pdf.Link(10, y-5, 172.5, 6.5, r.pdf.AddLink())
@@ -344,43 +378,43 @@ func (r *pdfReporter) createTableOfContents(parsedModel *types.Model) {
 	*/
 
 	y += 6
-	assets := "Assets"
+	assets := "Activos"
 	count = len(parsedModel.OutOfScopeTechnicalAssets())
 	if count == 1 {
-		assets = "Asset"
+		assets = "Activo"
 	}
-	r.pdf.Text(11, y, "    "+"Out-of-Scope Assets: "+strconv.Itoa(count)+" "+assets)
+	r.pdf.Text(11, y, "    "+"Activos Fuera de Alcance: "+strconv.Itoa(count)+" "+assets)
 	r.pdf.Text(175, y, "{out-of-scope-assets}")
 	r.pdf.Line(15.6, y+1.3, 11+171.5, y+1.3)
 	r.pdf.Link(10, y-5, 172.5, 6.5, r.pdf.AddLink())
 
 	y += 6
 	modelFailures := flattenRiskSlice(filterByModelFailures(parsedModel, parsedModel.GeneratedRisksByCategory))
-	risksStr = "Risks"
+	risksStr = "Riesgos"
 	count = len(modelFailures)
 	if count == 1 {
-		risksStr = "Risk"
+		risksStr = "Riesgo"
 	}
 	countStillAtRisk := len(types.ReduceToOnlyStillAtRisk(modelFailures))
 	if countStillAtRisk > 0 {
 		colorModelFailure(r.pdf)
 	}
-	r.pdf.Text(11, y, "    "+"Potential Model Failures: "+strconv.Itoa(countStillAtRisk)+" / "+strconv.Itoa(count)+" "+risksStr)
+	r.pdf.Text(11, y, "    "+"Posibles Fallas del Modelo: "+strconv.Itoa(countStillAtRisk)+" / "+strconv.Itoa(count)+" "+risksStr)
 	r.pdf.Text(175, y, "{model-failures}")
 	r.pdfColorBlack()
 	r.pdf.Line(15.6, y+1.3, 11+171.5, y+1.3)
 	r.pdf.Link(10, y-5, 172.5, 6.5, r.pdf.AddLink())
 
 	y += 6
-	questions := "Questions"
+	questions := "Preguntas"
 	count = len(parsedModel.Questions)
 	if count == 1 {
-		questions = "Question"
+		questions = "Pregunta"
 	}
 	if questionsUnanswered(parsedModel) > 0 {
 		colorModelFailure(r.pdf)
 	}
-	r.pdf.Text(11, y, "    "+"Questions: "+strconv.Itoa(questionsUnanswered(parsedModel))+" / "+strconv.Itoa(count)+" "+questions)
+	r.pdf.Text(11, y, "    "+"Preguntas: "+strconv.Itoa(questionsUnanswered(parsedModel))+" / "+strconv.Itoa(count)+" "+questions)
 	r.pdf.Text(175, y, "{questions}")
 	r.pdfColorBlack()
 	r.pdf.Line(15.6, y+1.3, 11+171.5, y+1.3)
@@ -397,10 +431,10 @@ func (r *pdfReporter) createTableOfContents(parsedModel *types.Model) {
 		}
 		r.pdf.SetFont("Helvetica", "B", fontSizeBody)
 		r.pdf.SetTextColor(0, 0, 0)
-		r.pdf.Text(11, y, "Risks by Vulnerability category")
+		r.pdf.Text(11, y, r.tr("Riesgos por Categoría de Vulnerabilidad"))
 		r.pdf.SetFont("Helvetica", "", fontSizeBody)
 		y += 6
-		r.pdf.Text(11, y, "    "+"Identified Risks by Vulnerability category")
+		r.pdf.Text(11, y, r.tr("    Riesgos Identificados por Categoría de Vulnerabilidad"))
 		r.pdf.Text(175, y, "{intro-risks-by-vulnerability-category}")
 		r.pdf.Line(15.6, y+1.3, 11+171.5, y+1.3)
 		r.pdf.Link(10, y-5, 172.5, 6.5, r.pdf.AddLink())
@@ -429,7 +463,7 @@ func (r *pdfReporter) createTableOfContents(parsedModel *types.Model) {
 				y = 40
 			}
 			countStillAtRisk := len(types.ReduceToOnlyStillAtRisk(newRisksStr))
-			suffix := strconv.Itoa(countStillAtRisk) + " / " + strconv.Itoa(len(newRisksStr)) + " Risk"
+			suffix := strconv.Itoa(countStillAtRisk) + " / " + strconv.Itoa(len(newRisksStr)) + " Riesgo"
 			if len(newRisksStr) != 1 {
 				suffix += "s"
 			}
@@ -452,10 +486,10 @@ func (r *pdfReporter) createTableOfContents(parsedModel *types.Model) {
 		}
 		r.pdf.SetFont("Helvetica", "B", fontSizeBody)
 		r.pdf.SetTextColor(0, 0, 0)
-		r.pdf.Text(11, y, "Risks by Technical Asset")
+		r.pdf.Text(11, y, r.tr("Riesgos por Activo Técnico"))
 		r.pdf.SetFont("Helvetica", "", fontSizeBody)
 		y += 6
-		r.pdf.Text(11, y, "    "+"Identified Risks by Technical Asset")
+		r.pdf.Text(11, y, r.tr("    Riesgos Identificados por Activo Técnico"))
 		r.pdf.Text(175, y, "{intro-risks-by-technical-asset}")
 		r.pdf.Line(15.6, y+1.3, 11+171.5, y+1.3)
 		r.pdf.Link(10, y-5, 172.5, 6.5, r.pdf.AddLink())
@@ -467,13 +501,13 @@ func (r *pdfReporter) createTableOfContents(parsedModel *types.Model) {
 				y = 40
 			}
 			countStillAtRisk := len(types.ReduceToOnlyStillAtRisk(newRisksStr))
-			suffix := strconv.Itoa(countStillAtRisk) + " / " + strconv.Itoa(len(newRisksStr)) + " Risk"
+			suffix := strconv.Itoa(countStillAtRisk) + " / " + strconv.Itoa(len(newRisksStr)) + " Riesgo"
 			if len(newRisksStr) != 1 {
 				suffix += "s"
 			}
 			if technicalAsset.OutOfScope {
 				r.pdfColorOutOfScope()
-				suffix = "out-of-scope"
+				suffix = "fuera de alcance"
 			} else {
 				switch types.HighestSeverityStillAtRisk(newRisksStr) {
 				case types.CriticalSeverity:
@@ -512,10 +546,10 @@ func (r *pdfReporter) createTableOfContents(parsedModel *types.Model) {
 		}
 		r.pdf.SetFont("Helvetica", "B", fontSizeBody)
 		r.pdfColorBlack()
-		r.pdf.Text(11, y, "Data Breach Probabilities by Data Asset")
+		r.pdf.Text(11, y, r.tr("Probabilidades de Brecha de Datos por Activo de Datos"))
 		r.pdf.SetFont("Helvetica", "", fontSizeBody)
 		y += 6
-		r.pdf.Text(11, y, "    "+"Identified Data Breach Probabilities by Data Asset")
+		r.pdf.Text(11, y, r.tr("    Probabilidades de Brecha Identificadas por Activo de Datos"))
 		r.pdf.Text(175, y, "{intro-risks-by-data-asset}")
 		r.pdf.Line(15.6, y+1.3, 11+171.5, y+1.3)
 		r.pdf.Link(10, y-5, 172.5, 6.5, r.pdf.AddLink())
@@ -527,7 +561,7 @@ func (r *pdfReporter) createTableOfContents(parsedModel *types.Model) {
 			}
 			newRisksStr := parsedModel.IdentifiedDataBreachProbabilityRisks(dataAsset)
 			countStillAtRisk := len(types.ReduceToOnlyStillAtRisk(newRisksStr))
-			suffix := strconv.Itoa(countStillAtRisk) + " / " + strconv.Itoa(len(newRisksStr)) + " Risk"
+			suffix := strconv.Itoa(countStillAtRisk) + " / " + strconv.Itoa(len(newRisksStr)) + " Riesgo"
 			if len(newRisksStr) != 1 {
 				suffix += "s"
 			}
@@ -563,7 +597,7 @@ func (r *pdfReporter) createTableOfContents(parsedModel *types.Model) {
 		}
 		r.pdf.SetFont("Helvetica", "B", fontSizeBody)
 		r.pdfColorBlack()
-		r.pdf.Text(11, y, "Trust Boundaries")
+		r.pdf.Text(11, y, r.tr("Límites de Confianza"))
 		r.pdf.SetFont("Helvetica", "", fontSizeBody)
 		for _, key := range sortedKeysOfTrustBoundaries(parsedModel) {
 			trustBoundary := parsedModel.TrustBoundaries[key]
@@ -596,7 +630,7 @@ func (r *pdfReporter) createTableOfContents(parsedModel *types.Model) {
 		}
 		r.pdf.SetFont("Helvetica", "B", fontSizeBody)
 		r.pdfColorBlack()
-		r.pdf.Text(11, y, "Shared Runtime")
+		r.pdf.Text(11, y, r.tr("Entorno Compartido"))
 		r.pdf.SetFont("Helvetica", "", fontSizeBody)
 		for _, key := range sortedKeysOfSharedRuntime(parsedModel) {
 			sharedRuntime := parsedModel.SharedRuntimes[key]
@@ -623,14 +657,14 @@ func (r *pdfReporter) createTableOfContents(parsedModel *types.Model) {
 	}
 	r.pdfColorBlack()
 	r.pdf.SetFont("Helvetica", "B", fontSizeBody)
-	r.pdf.Text(11, y, "About Threagile")
+	r.pdf.Text(11, y, r.tr("Acerca de Threagile"))
 	r.pdf.SetFont("Helvetica", "", fontSizeBody)
 	y += 6
 	if y > 275 {
 		r.pageBreakInLists()
 		y = 40
 	}
-	r.pdf.Text(11, y, "    "+"Risk Rules Checked by Threagile")
+	r.pdf.Text(11, y, r.tr("    Reglas de Riesgo Verificadas por Threagile"))
 	r.pdf.Text(175, y, "{risk-rules-checked}")
 	r.pdf.Line(15.6, y+1.3, 11+171.5, y+1.3)
 	r.pdf.Link(10, y-5, 172.5, 6.5, r.pdf.AddLink())
@@ -640,7 +674,7 @@ func (r *pdfReporter) createTableOfContents(parsedModel *types.Model) {
 		y = 40
 	}
 	r.pdfColorDisclaimer()
-	r.pdf.Text(11, y, "    "+"Disclaimer")
+	r.pdf.Text(11, y, r.tr("    Descargo de Responsabilidad"))
 	r.pdf.Text(175, y, "{disclaimer}")
 	r.pdf.Line(15.6, y+1.3, 11+171.5, y+1.3)
 	r.pdf.Link(10, y-5, 172.5, 6.5, r.pdf.AddLink())
@@ -746,52 +780,50 @@ func (r *pdfReporter) defineLinkTarget(alias string) {
 
 func (r *pdfReporter) createDisclaimer(parsedModel *types.Model) {
 	r.pdf.AddPage()
-	r.currentChapterTitleBreadcrumb = "Disclaimer"
+	r.currentChapterTitleBreadcrumb = "Descargo de Responsabilidad"
 	r.defineLinkTarget("{disclaimer}")
 	gofpdi.UseImportedTemplate(r.pdf, r.contentTemplateId, 0, 0, 0, 300)
 	r.pdfColorDisclaimer()
 	r.pdf.SetFont("Helvetica", "B", fontSizeHeadline)
-	r.pdf.Text(11, 40, "Disclaimer")
+	r.pdf.Text(11, 40, "Descargo de Responsabilidad")
 	r.pdf.SetFont("Helvetica", "", fontSizeBody)
 	r.pdf.SetY(46)
 
 	var disclaimer strings.Builder
-	disclaimer.WriteString(parsedModel.Author.Name + " conducted this threat analysis using the open-source Threagile toolkit " +
-		"on the applications and systems that were modeled as of this report's date. " +
-		"Information security threats are continually changing, with new " +
-		"vulnerabilities discovered on a daily basis, and no application can ever be 100% secure no matter how much " +
-		"threat modeling is conducted. It is recommended to execute threat modeling and also penetration testing on a regular basis " +
-		"(for example yearly) to ensure a high ongoing level of security and constantly check for new attack vectors. " +
+	disclaimer.WriteString(parsedModel.Author.Name + " realizó este análisis de amenazas utilizando el toolkit de código abierto Threagile " +
+		"en las aplicaciones y sistemas modelados a la fecha de este reporte. " +
+		"Las amenazas de seguridad informática cambian continuamente, con nuevas " +
+		"vulnerabilidades descubiertas diariamente, y ninguna aplicación puede ser 100% segura sin importar cuánto " +
+		"modelado de amenazas se realice. Se recomienda ejecutar modelado de amenazas y también pruebas de penetración de forma regular " +
+		"(por ejemplo, anualmente) para asegurar un alto nivel continuo de seguridad y verificar constantemente nuevos vectores de ataque. " +
 		"<br><br>" +
-		"This report cannot and does not protect against personal or business loss as the result of use of the " +
-		"applications or systems described. " + parsedModel.Author.Name + " and the Threagile toolkit offers no warranties, representations or " +
-		"legal certifications concerning the applications or systems it tests. All software includes defects: nothing " +
-		"in this document is intended to represent or warrant that threat modeling was complete and without error, " +
-		"nor does this document represent or warrant that the architecture analyzed is suitable to task, free of other " +
-		"defects than reported, fully compliant with any industry standards, or fully compatible with any operating " +
-		"system, hardware, or other application. Threat modeling tries to analyze the modeled architecture without " +
-		"having access to a real working system and thus cannot and does not test the implementation for defects and vulnerabilities. " +
-		"These kinds of checks would only be possible with a separate code review and penetration test against " +
-		"a working system and not via a threat model." +
+		"Este reporte no puede ni protege contra pérdidas personales o comerciales como resultado del uso de las " +
+		"aplicaciones o sistemas descritos. " + parsedModel.Author.Name + " y el toolkit Threagile no ofrecen garantías, representaciones o " +
+		"certificaciones legales respecto de las aplicaciones o sistemas evaluados. Todo software incluye defectos: nada " +
+		"en este documento pretende representar o garantizar que el modelado de amenazas fue completo y sin errores, " +
+		"ni que la arquitectura analizada sea adecuada para su propósito. El modelado de amenazas intenta analizar la arquitectura " +
+		"modelada sin acceso a un sistema real en funcionamiento y, por lo tanto, no puede evaluar la implementación en busca " +
+		"de defectos y vulnerabilidades. Ese tipo de verificaciones solo sería posible con una revisión de código y prueba " +
+		"de penetración separadas contra un sistema en funcionamiento." +
 		"<br><br>" +
-		"By using the resulting information you agree that " + parsedModel.Author.Name + " and the Threagile toolkit " +
-		"shall be held harmless in any event." +
+		"Al utilizar la información resultante, usted acepta que " + parsedModel.Author.Name + " y el toolkit Threagile " +
+		"quedarán exentos de responsabilidad en cualquier evento." +
 		"<br><br>" +
-		"This report is confidential and intended for internal, confidential use by the client. The recipient " +
-		"is obligated to ensure the highly confidential contents are kept secret. The recipient assumes responsibility " +
-		"for further distribution of this document." +
+		"Este reporte es confidencial y está destinado al uso interno y confidencial del cliente. El destinatario " +
+		"está obligado a garantizar que el contenido altamente confidencial se mantenga en secreto. El destinatario asume la responsabilidad " +
+		"de la distribución posterior de este documento." +
 		"<br><br>" +
-		"In this particular project, a time box approach was used to define the analysis effort. This means that the " +
-		"author allotted a prearranged amount of time to identify and document threats. Because of this, there " +
-		"is no guarantee that all possible threats and risks are discovered. Furthermore, the analysis " +
-		"applies to a snapshot of the current state of the modeled architecture (based on the architecture information provided " +
-		"by the customer) at the examination time." +
+		"En este proyecto particular, se utilizó un enfoque de caja de tiempo para definir el esfuerzo de análisis. Esto significa que el " +
+		"autor asignó una cantidad de tiempo preestablecida para identificar y documentar amenazas. Debido a esto, no hay " +
+		"garantía de que se descubran todas las posibles amenazas y riesgos. Además, el análisis " +
+		"se aplica a una instantánea del estado actual de la arquitectura modelada (basada en la información de arquitectura proporcionada " +
+		"por el cliente) en el momento del examen." +
 		"<br><br><br>" +
-		"<b>Report Distribution</b>" +
+		"<b>Distribución del Reporte</b>" +
 		"<br><br>" +
-		"Distribution of this report (in full or in part like diagrams or risk findings) requires that this disclaimer " +
-		"as well as the chapter about the Threagile toolkit and method used is kept intact as part of the " +
-		"distributed report or referenced from the distributed parts.")
+		"La distribución de este reporte (total o parcial, como diagramas o hallazgos de riesgo) requiere que este descargo de responsabilidad, " +
+		"así como el capítulo sobre el toolkit Threagile y el método utilizado, se mantenga intacto como parte del " +
+		"reporte distribuido o sea referenciado desde las partes distribuidas.")
 	html := r.pdf.HTMLBasicNew()
 	uni := r.pdf.UnicodeTranslatorFromDescriptor("")
 	html.Write(5, uni(disclaimer.String()))
@@ -801,7 +833,7 @@ func (r *pdfReporter) createDisclaimer(parsedModel *types.Model) {
 func (r *pdfReporter) createManagementSummary(parsedModel *types.Model, tempFolder string) error {
 	uni := r.pdf.UnicodeTranslatorFromDescriptor("")
 	r.pdf.SetTextColor(0, 0, 0)
-	title := "Management Summary"
+	title := "Resumen Ejecutivo"
 	r.addHeadline(title, false)
 	r.defineLinkTarget("{management-summary}")
 	r.currentChapterTitleBreadcrumb = title
@@ -819,21 +851,19 @@ func (r *pdfReporter) createManagementSummary(parsedModel *types.Model, tempFold
 	countStatusFalsePositive := len(filteredByRiskStatus(parsedModel, types.FalsePositive))
 
 	html := r.pdf.HTMLBasicNew()
-	html.Write(5, "Threagile toolkit was used to model the architecture of \""+uni(parsedModel.Title)+"\" "+
-		"and derive risks by analyzing the components and data flows. The risks identified during this analysis are shown "+
-		"in the following chapters. Identified risks during threat modeling do not necessarily mean that the "+
-		"vulnerability associated with this risk actually exists: it is more to be seen as a list of potential risks and "+
-		"threats, which should be individually reviewed and reduced by removing false positives. For the remaining risks it should "+
-		"be checked in the design and implementation of \""+uni(parsedModel.Title)+"\" whether the mitigation advices "+
-		"have been applied or not."+
+	html.Write(5, "Se utilizó el toolkit Threagile para modelar la arquitectura de \""+uni(parsedModel.Title)+"\" "+
+		"y derivar riesgos analizando los componentes y flujos de datos. Los riesgos identificados durante este análisis se muestran "+
+		"en los siguientes capítulos. Los riesgos identificados durante el modelado de amenazas no necesariamente significan que la "+
+		"vulnerabilidad asociada con este riesgo realmente exista: deben verse más como una lista de riesgos y amenazas potenciales, "+
+		"que deben revisarse individualmente y reducirse eliminando falsos positivos. Para los riesgos restantes, debe verificarse en el diseño e implementación de \""+uni(parsedModel.Title)+"\" si los consejos de mitigación han sido aplicados o no."+
 		"<br><br>"+
-		"Each risk finding references a chapter of the OWASP ASVS (Application Security Verification Standard) audit checklist. "+
-		"The OWASP ASVS checklist should be considered as an inspiration by architects and developers to further harden "+
-		"the application in a Defense-in-Depth approach. Additionally, for each risk finding a "+
-		"link towards a matching OWASP Cheat Sheet or similar with technical details about how to implement a mitigation is given."+
+		"Cada hallazgo de riesgo hace referencia a un capítulo del OWASP ASVS (Estándar de Verificación de Seguridad de Aplicaciones). "+
+		"La lista de verificación OWASP ASVS debe considerarse como inspiración para que arquitectos y desarrolladores endurezcan aún más "+
+		"la aplicación en un enfoque de Defensa en Profundidad. Adicionalmente, para cada hallazgo de riesgo se proporciona un "+
+		"enlace hacia una Hoja de Referencia OWASP o similar con detalles técnicos sobre cómo implementar una mitigación."+
 		"<br><br>"+
-		"In total <b>"+strconv.Itoa(totalRiskCount(parsedModel))+" initial risks</b> in <b>"+strconv.Itoa(len(parsedModel.GeneratedRisksByCategory))+" categories</b> have "+
-		"been identified during the threat modeling process:<br><br>") // TODO plural singular stuff risk/s category/ies has/have
+		"En total <b>"+strconv.Itoa(totalRiskCount(parsedModel))+" riesgos iniciales</b> en <b>"+strconv.Itoa(len(parsedModel.GeneratedRisksByCategory))+" categorías</b> han "+
+		"sido identificados durante el proceso de modelado de amenazas:<br><br>") // TODO plural singular stuff risk/s category/ies has/have
 
 	r.pdf.SetFont("Helvetica", "B", fontSizeBody)
 
@@ -843,60 +873,60 @@ func (r *pdfReporter) createManagementSummary(parsedModel *types.Model, tempFold
 	colorRiskStatusUnchecked(r.pdf)
 	r.pdf.CellFormat(23, 6, "", "0", 0, "", false, 0, "")
 	r.pdf.CellFormat(10, 6, strconv.Itoa(countStatusUnchecked), "0", 0, "R", false, 0, "")
-	r.pdf.CellFormat(60, 6, "unchecked", "0", 0, "", false, 0, "")
+	r.pdf.CellFormat(60, 6, "sin verificar", "0", 0, "", false, 0, "")
 	r.pdf.Ln(-1)
 
 	colorCriticalRisk(r.pdf)
 	r.pdf.CellFormat(17, 6, "", "0", 0, "", false, 0, "")
 	r.pdf.CellFormat(10, 6, strconv.Itoa(countCritical), "0", 0, "R", false, 0, "")
-	r.pdf.CellFormat(60, 6, "critical risk", "0", 0, "", false, 0, "")
+	r.pdf.CellFormat(60, 6, "riesgo crítico", "0", 0, "", false, 0, "")
 	colorRiskStatusInDiscussion(r.pdf)
 	r.pdf.CellFormat(23, 6, "", "0", 0, "", false, 0, "")
 	r.pdf.CellFormat(10, 6, strconv.Itoa(countStatusInDiscussion), "0", 0, "R", false, 0, "")
-	r.pdf.CellFormat(60, 6, "in discussion", "0", 0, "", false, 0, "")
+	r.pdf.CellFormat(60, 6, "en discusión", "0", 0, "", false, 0, "")
 	r.pdf.Ln(-1)
 
 	colorHighRisk(r.pdf)
 	r.pdf.CellFormat(17, 6, "", "0", 0, "", false, 0, "")
 	r.pdf.CellFormat(10, 6, strconv.Itoa(countHigh), "0", 0, "R", false, 0, "")
-	r.pdf.CellFormat(60, 6, "high risk", "0", 0, "", false, 0, "")
+	r.pdf.CellFormat(60, 6, "riesgo alto", "0", 0, "", false, 0, "")
 	colorRiskStatusAccepted(r.pdf)
 	r.pdf.CellFormat(23, 6, "", "0", 0, "", false, 0, "")
 	r.pdf.CellFormat(10, 6, strconv.Itoa(countStatusAccepted), "0", 0, "R", false, 0, "")
-	r.pdf.CellFormat(60, 6, "accepted", "0", 0, "", false, 0, "")
+	r.pdf.CellFormat(60, 6, "aceptado", "0", 0, "", false, 0, "")
 	r.pdf.Ln(-1)
 
 	colorElevatedRisk(r.pdf)
 	r.pdf.CellFormat(17, 6, "", "0", 0, "", false, 0, "")
 	r.pdf.CellFormat(10, 6, strconv.Itoa(countElevated), "0", 0, "R", false, 0, "")
-	r.pdf.CellFormat(60, 6, "elevated risk", "0", 0, "", false, 0, "")
+	r.pdf.CellFormat(60, 6, "riesgo elevado", "0", 0, "", false, 0, "")
 	colorRiskStatusInProgress(r.pdf)
 	r.pdf.CellFormat(23, 6, "", "0", 0, "", false, 0, "")
 	r.pdf.CellFormat(10, 6, strconv.Itoa(countStatusInProgress), "0", 0, "R", false, 0, "")
-	r.pdf.CellFormat(60, 6, "in progress", "0", 0, "", false, 0, "")
+	r.pdf.CellFormat(60, 6, "en progreso", "0", 0, "", false, 0, "")
 	r.pdf.Ln(-1)
 
 	colorMediumRisk(r.pdf)
 	r.pdf.CellFormat(17, 6, "", "0", 0, "", false, 0, "")
 	r.pdf.CellFormat(10, 6, strconv.Itoa(countMedium), "0", 0, "R", false, 0, "")
-	r.pdf.CellFormat(60, 6, "medium risk", "0", 0, "", false, 0, "")
+	r.pdf.CellFormat(60, 6, "riesgo medio", "0", 0, "", false, 0, "")
 	colorRiskStatusMitigated(r.pdf)
 	r.pdf.CellFormat(23, 6, "", "0", 0, "", false, 0, "")
 	r.pdf.CellFormat(10, 6, strconv.Itoa(countStatusMitigated), "0", 0, "R", false, 0, "")
 	r.pdf.SetFont("Helvetica", "BI", fontSizeBody)
-	r.pdf.CellFormat(60, 6, "mitigated", "0", 0, "", false, 0, "")
+	r.pdf.CellFormat(60, 6, "mitigado", "0", 0, "", false, 0, "")
 	r.pdf.SetFont("Helvetica", "B", fontSizeBody)
 	r.pdf.Ln(-1)
 
 	colorLowRisk(r.pdf)
 	r.pdf.CellFormat(17, 6, "", "0", 0, "", false, 0, "")
 	r.pdf.CellFormat(10, 6, strconv.Itoa(countLow), "0", 0, "R", false, 0, "")
-	r.pdf.CellFormat(60, 6, "low risk", "0", 0, "", false, 0, "")
+	r.pdf.CellFormat(60, 6, "riesgo bajo", "0", 0, "", false, 0, "")
 	colorRiskStatusFalsePositive(r.pdf)
 	r.pdf.CellFormat(23, 6, "", "0", 0, "", false, 0, "")
 	r.pdf.CellFormat(10, 6, strconv.Itoa(countStatusFalsePositive), "0", 0, "R", false, 0, "")
 	r.pdf.SetFont("Helvetica", "BI", fontSizeBody)
-	r.pdf.CellFormat(60, 6, "false positive", "0", 0, "", false, 0, "")
+	r.pdf.CellFormat(60, 6, "falso positivo", "0", 0, "", false, 0, "")
 	r.pdf.SetFont("Helvetica", "B", fontSizeBody)
 	r.pdf.Ln(-1)
 
@@ -997,13 +1027,13 @@ func (r *pdfReporter) createRiskMitigationStatus(parsedModel *types.Model, tempF
 	r.pdf.SetTextColor(0, 0, 0)
 	stillAtRisk := filteredByStillAtRisk(parsedModel)
 	count := len(stillAtRisk)
-	title := "Risk Mitigation"
+	title := "Mitigación de Riesgos"
 	r.addHeadline(title, false)
 	r.defineLinkTarget("{risk-mitigation-status}")
 	r.currentChapterTitleBreadcrumb = title
 
 	html := r.pdf.HTMLBasicNew()
-	html.Write(5, "The following chart gives a high-level overview of the risk tracking status (including mitigated risks):")
+	html.Write(5, "El siguiente gráfico ofrece una visión general del estado de seguimiento de riesgos (incluyendo riesgos mitigados):")
 
 	risksCritical := filteredBySeverity(parsedModel, types.CriticalSeverity)
 	risksHigh := filteredBySeverity(parsedModel, types.HighSeverity)
@@ -1126,11 +1156,11 @@ func (r *pdfReporter) createRiskMitigationStatus(parsedModel *types.Model, tempF
 	// draw the X-Axis legend on my own
 	r.pdf.SetFont("Helvetica", "", fontSizeSmall)
 	r.pdfColorBlack()
-	r.pdf.Text(24.02, 169, "Low ("+strconv.Itoa(len(risksLow))+")")
-	r.pdf.Text(46.10, 169, "Medium ("+strconv.Itoa(len(risksMedium))+")")
-	r.pdf.Text(69.74, 169, "Elevated ("+strconv.Itoa(len(risksElevated))+")")
-	r.pdf.Text(97.95, 169, "High ("+strconv.Itoa(len(risksHigh))+")")
-	r.pdf.Text(121.65, 169, "Critical ("+strconv.Itoa(len(risksCritical))+")")
+	r.pdf.Text(24.02, 169, "Bajo ("+strconv.Itoa(len(risksLow))+")")
+	r.pdf.Text(46.10, 169, "Medio ("+strconv.Itoa(len(risksMedium))+")")
+	r.pdf.Text(69.74, 169, "Elevado ("+strconv.Itoa(len(risksElevated))+")")
+	r.pdf.Text(97.95, 169, "Alto ("+strconv.Itoa(len(risksHigh))+")")
+	r.pdf.Text(121.65, 169, "Crítico ("+strconv.Itoa(len(risksCritical))+")")
 
 	r.pdf.SetFont("Helvetica", "B", fontSizeBody)
 	r.pdf.Ln(20)
@@ -1138,35 +1168,35 @@ func (r *pdfReporter) createRiskMitigationStatus(parsedModel *types.Model, tempF
 	colorRiskStatusUnchecked(r.pdf)
 	r.pdf.CellFormat(150, 6, "", "0", 0, "", false, 0, "")
 	r.pdf.CellFormat(10, 6, strconv.Itoa(countStatusUnchecked), "0", 0, "R", false, 0, "")
-	r.pdf.CellFormat(60, 6, "unchecked", "0", 0, "", false, 0, "")
+	r.pdf.CellFormat(60, 6, "sin verificar", "0", 0, "", false, 0, "")
 	r.pdf.Ln(-1)
 	colorRiskStatusInDiscussion(r.pdf)
 	r.pdf.CellFormat(150, 6, "", "0", 0, "", false, 0, "")
 	r.pdf.CellFormat(10, 6, strconv.Itoa(countStatusInDiscussion), "0", 0, "R", false, 0, "")
-	r.pdf.CellFormat(60, 6, "in discussion", "0", 0, "", false, 0, "")
+	r.pdf.CellFormat(60, 6, "en discusión", "0", 0, "", false, 0, "")
 	r.pdf.Ln(-1)
 	colorRiskStatusAccepted(r.pdf)
 	r.pdf.CellFormat(150, 6, "", "0", 0, "", false, 0, "")
 	r.pdf.CellFormat(10, 6, strconv.Itoa(countStatusAccepted), "0", 0, "R", false, 0, "")
-	r.pdf.CellFormat(60, 6, "accepted", "0", 0, "", false, 0, "")
+	r.pdf.CellFormat(60, 6, "aceptado", "0", 0, "", false, 0, "")
 	r.pdf.Ln(-1)
 	colorRiskStatusInProgress(r.pdf)
 	r.pdf.CellFormat(150, 6, "", "0", 0, "", false, 0, "")
 	r.pdf.CellFormat(10, 6, strconv.Itoa(countStatusInProgress), "0", 0, "R", false, 0, "")
-	r.pdf.CellFormat(60, 6, "in progress", "0", 0, "", false, 0, "")
+	r.pdf.CellFormat(60, 6, "en progreso", "0", 0, "", false, 0, "")
 	r.pdf.Ln(-1)
 	colorRiskStatusMitigated(r.pdf)
 	r.pdf.CellFormat(150, 6, "", "0", 0, "", false, 0, "")
 	r.pdf.CellFormat(10, 6, strconv.Itoa(countStatusMitigated), "0", 0, "R", false, 0, "")
 	r.pdf.SetFont("Helvetica", "BI", fontSizeBody)
-	r.pdf.CellFormat(60, 6, "mitigated", "0", 0, "", false, 0, "")
+	r.pdf.CellFormat(60, 6, "mitigado", "0", 0, "", false, 0, "")
 	r.pdf.SetFont("Helvetica", "B", fontSizeBody)
 	r.pdf.Ln(-1)
 	colorRiskStatusFalsePositive(r.pdf)
 	r.pdf.CellFormat(150, 6, "", "0", 0, "", false, 0, "")
 	r.pdf.CellFormat(10, 6, strconv.Itoa(countStatusFalsePositive), "0", 0, "R", false, 0, "")
 	r.pdf.SetFont("Helvetica", "BI", fontSizeBody)
-	r.pdf.CellFormat(60, 6, "false positive", "0", 0, "", false, 0, "")
+	r.pdf.CellFormat(60, 6, "falso positivo", "0", 0, "", false, 0, "")
 	r.pdf.SetFont("Helvetica", "B", fontSizeBody)
 	r.pdf.Ln(-1)
 
@@ -1175,12 +1205,12 @@ func (r *pdfReporter) createRiskMitigationStatus(parsedModel *types.Model, tempF
 	r.pdfColorBlack()
 	if count == 0 {
 		html.Write(5, "<br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>"+
-			"After removal of risks with status <i>mitigated</i> and <i>false positive</i> "+
-			"<b>"+strconv.Itoa(count)+" remain unmitigated</b>.")
+			"Luego de eliminar los riesgos con estado <i>mitigado</i> y <i>falso positivo</i> "+
+			"<b>"+strconv.Itoa(count)+" permanecen sin mitigar</b>.")
 	} else {
 		html.Write(5, "<br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>"+
-			"After removal of risks with status <i>mitigated</i> and <i>false positive</i> "+
-			"the following <b>"+strconv.Itoa(count)+" remain unmitigated</b>:")
+			"Luego de eliminar los riesgos con estado <i>mitigado</i> y <i>falso positivo</i> "+
+			"los siguientes <b>"+strconv.Itoa(count)+" permanecen sin mitigar</b>:")
 
 		countCritical := len(types.ReduceToOnlyStillAtRisk(filteredBySeverity(parsedModel, types.CriticalSeverity)))
 		countHigh := len(types.ReduceToOnlyStillAtRisk(filteredBySeverity(parsedModel, types.HighSeverity)))
@@ -1257,7 +1287,7 @@ func (r *pdfReporter) createRiskMitigationStatus(parsedModel *types.Model, tempF
 		colorCriticalRisk(r.pdf)
 		r.pdf.CellFormat(10, 6, "", "0", 0, "", false, 0, "")
 		r.pdf.CellFormat(10, 6, strconv.Itoa(countCritical), "0", 0, "R", false, 0, "")
-		r.pdf.CellFormat(60, 6, "unmitigated critical risk", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(60, 6, "riesgo crítico sin mitigar", "0", 0, "", false, 0, "")
 		r.pdf.CellFormat(22, 6, "", "0", 0, "", false, 0, "")
 		r.pdf.CellFormat(10, 6, "", "0", 0, "R", false, 0, "")
 		r.pdf.CellFormat(60, 6, "", "0", 0, "", false, 0, "")
@@ -1265,38 +1295,38 @@ func (r *pdfReporter) createRiskMitigationStatus(parsedModel *types.Model, tempF
 		colorHighRisk(r.pdf)
 		r.pdf.CellFormat(10, 6, "", "0", 0, "", false, 0, "")
 		r.pdf.CellFormat(10, 6, strconv.Itoa(countHigh), "0", 0, "R", false, 0, "")
-		r.pdf.CellFormat(60, 6, "unmitigated high risk", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(60, 6, "riesgo alto sin mitigar", "0", 0, "", false, 0, "")
 		colorBusiness(r.pdf)
 		r.pdf.CellFormat(22, 6, "", "0", 0, "", false, 0, "")
 		r.pdf.CellFormat(10, 6, strconv.Itoa(countBusinessSide), "0", 0, "R", false, 0, "")
-		r.pdf.CellFormat(60, 6, "business side related", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(60, 6, "relacionado al negocio", "0", 0, "", false, 0, "")
 		r.pdf.Ln(-1)
 		colorElevatedRisk(r.pdf)
 		r.pdf.CellFormat(10, 6, "", "0", 0, "", false, 0, "")
 		r.pdf.CellFormat(10, 6, strconv.Itoa(countElevated), "0", 0, "R", false, 0, "")
-		r.pdf.CellFormat(60, 6, "unmitigated elevated risk", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(60, 6, "riesgo elevado sin mitigar", "0", 0, "", false, 0, "")
 		colorArchitecture(r.pdf)
 		r.pdf.CellFormat(22, 6, "", "0", 0, "", false, 0, "")
 		r.pdf.CellFormat(10, 6, strconv.Itoa(countArchitecture), "0", 0, "R", false, 0, "")
-		r.pdf.CellFormat(60, 6, "architecture related", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(60, 6, "relacionado a la arquitectura", "0", 0, "", false, 0, "")
 		r.pdf.Ln(-1)
 		colorMediumRisk(r.pdf)
 		r.pdf.CellFormat(10, 6, "", "0", 0, "", false, 0, "")
 		r.pdf.CellFormat(10, 6, strconv.Itoa(countMedium), "0", 0, "R", false, 0, "")
-		r.pdf.CellFormat(60, 6, "unmitigated medium risk", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(60, 6, "riesgo medio sin mitigar", "0", 0, "", false, 0, "")
 		colorDevelopment(r.pdf)
 		r.pdf.CellFormat(22, 6, "", "0", 0, "", false, 0, "")
 		r.pdf.CellFormat(10, 6, strconv.Itoa(countDevelopment), "0", 0, "R", false, 0, "")
-		r.pdf.CellFormat(60, 6, "development related", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(60, 6, "relacionado al desarrollo", "0", 0, "", false, 0, "")
 		r.pdf.Ln(-1)
 		colorLowRisk(r.pdf)
 		r.pdf.CellFormat(10, 6, "", "0", 0, "", false, 0, "")
 		r.pdf.CellFormat(10, 6, strconv.Itoa(countLow), "0", 0, "R", false, 0, "")
-		r.pdf.CellFormat(60, 6, "unmitigated low risk", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(60, 6, "riesgo bajo sin mitigar", "0", 0, "", false, 0, "")
 		colorOperation(r.pdf)
 		r.pdf.CellFormat(22, 6, "", "0", 0, "", false, 0, "")
 		r.pdf.CellFormat(10, 6, strconv.Itoa(countOperation), "0", 0, "R", false, 0, "")
-		r.pdf.CellFormat(60, 6, "operations related", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(60, 6, "relacionado a operaciones", "0", 0, "", false, 0, "")
 		r.pdf.Ln(-1)
 		r.pdf.SetFont("Helvetica", "", fontSizeBody)
 	}
@@ -1306,7 +1336,7 @@ func (r *pdfReporter) createRiskMitigationStatus(parsedModel *types.Model, tempF
 func (r *pdfReporter) createAssetRegister(parsedModel *types.Model) {
 	uni := r.pdf.UnicodeTranslatorFromDescriptor("")
 	r.pdf.SetTextColor(0, 0, 0)
-	chapTitle := "Asset Register"
+	chapTitle := "Registro de Activos"
 	r.addHeadline(chapTitle, false)
 	r.defineLinkTarget("{asset-register}")
 	r.currentChapterTitleBreadcrumb = chapTitle
@@ -1315,7 +1345,7 @@ func (r *pdfReporter) createAssetRegister(parsedModel *types.Model) {
 	var strBuilder strings.Builder
 	r.pdf.SetFont("Helvetica", "", fontSizeBody)
 
-	subTitle := "Technical Assets"
+	subTitle := "Activos Técnicos"
 	r.addHeadline(subTitle, true)
 	r.currentChapterTitleBreadcrumb = subTitle
 	for _, technicalAsset := range sortedTechnicalAssetsByTitle(parsedModel) {
@@ -1335,7 +1365,7 @@ func (r *pdfReporter) createAssetRegister(parsedModel *types.Model) {
 		strBuilder.WriteString(uni(technicalAsset.Title))
 		strBuilder.WriteString("</b>")
 		if technicalAsset.OutOfScope {
-			strBuilder.WriteString(": out-of-scope")
+			strBuilder.WriteString(": fuera de alcance")
 		}
 		strBuilder.WriteString("<br>")
 		html.Write(5, strBuilder.String())
@@ -1346,7 +1376,7 @@ func (r *pdfReporter) createAssetRegister(parsedModel *types.Model) {
 		r.pdf.Link(9, posY, 190, r.pdf.GetY()-posY+4, r.tocLinkIdByAssetId[technicalAsset.Id])
 	}
 
-	subTitle = "Data Assets"
+	subTitle = "Activos de Datos"
 	r.addHeadline(subTitle, true)
 	r.currentChapterTitleBreadcrumb = subTitle
 
@@ -1440,20 +1470,20 @@ func (r *pdfReporter) renderImpactAnalysis(parsedModel *types.Model, initialRisk
 	if !initialRisks {
 		count, catCount = len(filteredByStillAtRisk(parsedModel)), len(reduceToOnlyStillAtRisk(parsedModel.GeneratedRisksByCategoryWithCurrentStatus()))
 	}
-	riskStr, catStr := "Risks", "Categories"
+	riskStr, catStr := "Riesgos", "Categorías"
 	if count == 1 {
-		riskStr = "Risk"
+		riskStr = "Riesgo"
 	}
 	if catCount == 1 {
-		catStr = "category"
+		catStr = "categoría"
 	}
 	if initialRisks {
-		chapTitle := "Impact Analysis of " + strconv.Itoa(count) + " Initial " + riskStr + " in " + strconv.Itoa(catCount) + " " + catStr
+		chapTitle := "Análisis de Impacto de " + strconv.Itoa(count) + " " + riskStr + " Iniciales en " + strconv.Itoa(catCount) + " " + catStr
 		r.addHeadline(chapTitle, false)
 		r.defineLinkTarget("{impact-analysis-initial-risks}")
 		r.currentChapterTitleBreadcrumb = chapTitle
 	} else {
-		chapTitle := "Impact Analysis of " + strconv.Itoa(count) + " Remaining " + riskStr + " in " + strconv.Itoa(catCount) + " " + catStr
+		chapTitle := "Análisis de Impacto de " + strconv.Itoa(count) + " " + riskStr + " Restantes en " + strconv.Itoa(catCount) + " " + catStr
 		r.addHeadline(chapTitle, false)
 		r.defineLinkTarget("{impact-analysis-remaining-risks}")
 		r.currentChapterTitleBreadcrumb = chapTitle
@@ -1461,22 +1491,22 @@ func (r *pdfReporter) renderImpactAnalysis(parsedModel *types.Model, initialRisk
 
 	html := r.pdf.HTMLBasicNew()
 	var strBuilder strings.Builder
-	riskStr = "risks"
+	riskStr = "riesgos"
 	if count == 1 {
-		riskStr = "risk"
+		riskStr = "riesgo"
 	}
-	initialStr := "initial"
+	initialStr := "iniciales"
 	if !initialRisks {
-		initialStr = "remaining"
+		initialStr = "restantes"
 	}
-	strBuilder.WriteString("The most prevalent impacts of the <b>" + strconv.Itoa(count) + " " +
-		initialStr + " " + riskStr + "</b> (distributed over <b>" + strconv.Itoa(catCount) + " risk categories</b>) are " +
-		"(taking the severity ratings into account and using the highest for each category):<br>")
+	strBuilder.WriteString("Los impactos más prevalentes de los <b>" + strconv.Itoa(count) + " " +
+		riskStr + " " + initialStr + "</b> (distribuidos en <b>" + strconv.Itoa(catCount) + " categorías de riesgo</b>) son " +
+		"(tomando en cuenta las calificaciones de severidad y usando la más alta para cada categoría):<br>")
 	html.Write(5, strBuilder.String())
 	strBuilder.Reset()
 	r.pdf.SetFont("Helvetica", "", fontSizeSmall)
 	r.pdfColorGray()
-	html.Write(5, "Risk finding paragraphs are clickable and link to the corresponding chapter.")
+	html.Write(5, "Los párrafos de hallazgos de riesgo son clickeables y enlazan al capítulo correspondiente.")
 	r.pdf.SetFont("Helvetica", "", fontSizeBody)
 
 	r.addCategories(parsedModel, getRiskCategories(parsedModel, reduceToSeverityRisk(parsedModel.GeneratedRisksByCategory, initialRisks, types.CriticalSeverity)),
@@ -1497,26 +1527,26 @@ func (r *pdfReporter) renderImpactAnalysis(parsedModel *types.Model, initialRisk
 func (r *pdfReporter) createOutOfScopeAssets(parsedModel *types.Model) {
 	uni := r.pdf.UnicodeTranslatorFromDescriptor("")
 	r.pdf.SetTextColor(0, 0, 0)
-	assets := "Assets"
+	assets := "Activos"
 	count := len(parsedModel.OutOfScopeTechnicalAssets())
 	if count == 1 {
-		assets = "Asset"
+		assets = "Activo"
 	}
-	chapTitle := "Out-of-Scope Assets: " + strconv.Itoa(count) + " " + assets
+	chapTitle := "Activos Fuera de Alcance: " + strconv.Itoa(count) + " " + assets
 	r.addHeadline(chapTitle, false)
 	r.defineLinkTarget("{out-of-scope-assets}")
 	r.currentChapterTitleBreadcrumb = chapTitle
 
 	html := r.pdf.HTMLBasicNew()
 	var strBuilder strings.Builder
-	strBuilder.WriteString("This chapter lists all technical assets that have been defined as out-of-scope. " +
-		"Each one should be checked in the model whether it should better be included in the " +
-		"overall risk analysis:<br>")
+	strBuilder.WriteString("Este capítulo lista todos los activos técnicos que han sido definidos como fuera de alcance. " +
+		"Cada uno debería verificarse en el modelo para determinar si debería incluirse en el " +
+		"análisis de riesgos general:<br>")
 	html.Write(5, strBuilder.String())
 	strBuilder.Reset()
 	r.pdf.SetFont("Helvetica", "", fontSizeSmall)
 	r.pdfColorGray()
-	html.Write(5, "Technical asset paragraphs are clickable and link to the corresponding chapter.")
+	html.Write(5, "Los párrafos de activos técnicos son clickeables y enlazan al capítulo correspondiente.")
 	r.pdf.SetFont("Helvetica", "", fontSizeBody)
 
 	outOfScopeAssetCount := 0
@@ -1536,7 +1566,7 @@ func (r *pdfReporter) createOutOfScopeAssets(parsedModel *types.Model) {
 			strBuilder.WriteString("<b>")
 			strBuilder.WriteString(uni(technicalAsset.Title))
 			strBuilder.WriteString("</b>")
-			strBuilder.WriteString(": out-of-scope")
+			strBuilder.WriteString(": fuera de alcance")
 			strBuilder.WriteString("<br>")
 			html.Write(5, strBuilder.String())
 			strBuilder.Reset()
@@ -1550,7 +1580,7 @@ func (r *pdfReporter) createOutOfScopeAssets(parsedModel *types.Model) {
 
 	if outOfScopeAssetCount == 0 {
 		r.pdfColorGray()
-		html.Write(5, "<br><br>No technical assets have been defined as out-of-scope.")
+		html.Write(5, "<br><br>No se han definido activos técnicos como fuera de alcance.")
 	}
 
 	r.pdf.SetDrawColor(0, 0, 0)
@@ -1560,16 +1590,16 @@ func (r *pdfReporter) createOutOfScopeAssets(parsedModel *types.Model) {
 func (r *pdfReporter) createModelFailures(parsedModel *types.Model) {
 	r.pdf.SetTextColor(0, 0, 0)
 	modelFailures := flattenRiskSlice(filterByModelFailures(parsedModel, parsedModel.GeneratedRisksByCategory))
-	risksStr := "Risks"
+	risksStr := "Riesgos"
 	count := len(modelFailures)
 	if count == 1 {
-		risksStr = "Risk"
+		risksStr = "Riesgo"
 	}
 	countStillAtRisk := len(types.ReduceToOnlyStillAtRisk(modelFailures))
 	if countStillAtRisk > 0 {
 		colorModelFailure(r.pdf)
 	}
-	chapTitle := "Potential Model Failures: " + strconv.Itoa(countStillAtRisk) + " / " + strconv.Itoa(count) + " " + risksStr
+	chapTitle := "Posibles Fallas del Modelo: " + strconv.Itoa(countStillAtRisk) + " / " + strconv.Itoa(count) + " " + risksStr
 	r.addHeadline(chapTitle, false)
 	r.defineLinkTarget("{model-failures}")
 	r.currentChapterTitleBreadcrumb = chapTitle
@@ -1577,20 +1607,20 @@ func (r *pdfReporter) createModelFailures(parsedModel *types.Model) {
 
 	html := r.pdf.HTMLBasicNew()
 	var strBuilder strings.Builder
-	strBuilder.WriteString("This chapter lists potential model failures where not all relevant assets have been " +
-		"modeled or the model might itself contain inconsistencies. Each potential model failure should be checked " +
-		"in the model against the architecture design:<br>")
+	strBuilder.WriteString("Este capítulo lista posibles fallas del modelo donde no todos los activos relevantes han sido " +
+		"modelados o el modelo podría contener inconsistencias. Cada posible falla del modelo debería verificarse " +
+		"en el modelo contra el diseño de la arquitectura:<br>")
 	html.Write(5, strBuilder.String())
 	strBuilder.Reset()
 	r.pdf.SetFont("Helvetica", "", fontSizeSmall)
 	r.pdfColorGray()
-	html.Write(5, "Risk finding paragraphs are clickable and link to the corresponding chapter.")
+	html.Write(5, "Los párrafos de hallazgos de riesgo son clickeables y enlazan al capítulo correspondiente.")
 	r.pdf.SetFont("Helvetica", "", fontSizeBody)
 
 	modelFailuresByCategory := filterByModelFailures(parsedModel, parsedModel.GeneratedRisksByCategory)
 	if len(modelFailuresByCategory) == 0 {
 		r.pdfColorGray()
-		html.Write(5, "<br><br>No potential model failures have been identified.")
+		html.Write(5, "<br><br>No se han identificado posibles fallas del modelo.")
 	} else {
 		r.addCategories(parsedModel, getRiskCategories(parsedModel, reduceToSeverityRisk(modelFailuresByCategory, true, types.CriticalSeverity)),
 			types.CriticalSeverity, true, true, false, true)
@@ -1631,7 +1661,7 @@ func flattenRiskSlice(risksByCat map[string][]*types.Risk) []*types.Risk {
 func (r *pdfReporter) createRAA(parsedModel *types.Model, introTextRAA string) {
 	uni := r.pdf.UnicodeTranslatorFromDescriptor("")
 	r.pdf.SetTextColor(0, 0, 0)
-	chapTitle := "RAA Analysis"
+	chapTitle := "Análisis RAA"
 	r.addHeadline(chapTitle, false)
 	r.defineLinkTarget("{raa-analysis}")
 	r.currentChapterTitleBreadcrumb = chapTitle
@@ -1644,7 +1674,7 @@ func (r *pdfReporter) createRAA(parsedModel *types.Model, introTextRAA string) {
 	strBuilder.Reset()
 	r.pdf.SetFont("Helvetica", "", fontSizeSmall)
 	r.pdfColorGray()
-	html.Write(5, "Technical asset paragraphs are clickable and link to the corresponding chapter.")
+	html.Write(5, "Los párrafos de activos técnicos son clickeables y enlazan al capítulo correspondiente.")
 	r.pdf.SetFont("Helvetica", "", fontSizeBody)
 
 	for _, technicalAsset := range sortedTechnicalAssetsByRAAAndTitle(parsedModel) {
@@ -1679,7 +1709,7 @@ func (r *pdfReporter) createRAA(parsedModel *types.Model, introTextRAA string) {
 		strBuilder.WriteString(uni(technicalAsset.Title))
 		strBuilder.WriteString("</b>")
 		if technicalAsset.OutOfScope {
-			strBuilder.WriteString(": out-of-scope")
+			strBuilder.WriteString(": fuera de alcance")
 		} else {
 			strBuilder.WriteString(": RAA ")
 			fmt.Fprintf(&strBuilder, "%.0f", technicalAsset.RAA)
@@ -1724,7 +1754,7 @@ func createDataRiskQuickWins() {
 	strBuilder.Reset()
 	r.pdf.SetFont("Helvetica", "", fontSizeSmall)
 	r.pdfColorGray()
-	html.Write(5, "Technical asset paragraphs are clickable and link to the corresponding chapter.")
+	html.Write(5, "Los párrafos de activos técnicos son clickeables y enlazan al capítulo correspondiente.")
 	r.pdf.SetFont("Helvetica", "", fontSizeBody)
 
 	for _, technicalAsset := range model.SortedTechnicalAssetsByQuickWinsAndTitle() {
@@ -1796,19 +1826,19 @@ func (r *pdfReporter) addCategories(parsedModel *types.Model, riskCategories []*
 		switch severity {
 		case types.CriticalSeverity:
 			colorCriticalRisk(r.pdf)
-			prefix = "Critical: "
+			prefix = "Crítico: "
 		case types.HighSeverity:
 			colorHighRisk(r.pdf)
-			prefix = "High: "
+			prefix = "Alto: "
 		case types.ElevatedSeverity:
 			colorElevatedRisk(r.pdf)
-			prefix = "Elevated: "
+			prefix = "Elevado: "
 		case types.MediumSeverity:
 			colorMediumRisk(r.pdf)
-			prefix = "Medium: "
+			prefix = "Medio: "
 		case types.LowSeverity:
 			colorLowRisk(r.pdf)
-			prefix = "Low: "
+			prefix = "Bajo: "
 		default:
 			r.pdfColorBlack()
 			prefix = ""
@@ -1836,23 +1866,23 @@ func (r *pdfReporter) addCategories(parsedModel *types.Model, riskCategories []*
 		strBuilder.WriteString(riskCategory.Title)
 		strBuilder.WriteString("</b>: ")
 		count := len(risksStr)
-		initialStr := "Initial"
+		initialStr := "Iniciales"
 		if !initialRisks {
-			initialStr = "Remaining"
+			initialStr = "Restantes"
 		}
 		remainingRisks := types.ReduceToOnlyStillAtRisk(risksStr)
-		suffix := strconv.Itoa(count) + " " + initialStr + " Risk"
+		suffix := strconv.Itoa(count) + " Riesgos " + initialStr
 		if bothInitialAndRemainingRisks {
-			suffix = strconv.Itoa(len(remainingRisks)) + " / " + strconv.Itoa(count) + " Risk"
+			suffix = strconv.Itoa(len(remainingRisks)) + " / " + strconv.Itoa(count) + " Riesgos"
 		}
-		if count != 1 {
-			suffix += "s"
+		if count == 1 {
+			suffix = strings.Replace(suffix, "Riesgos", "Riesgo", 1)
 		}
-		suffix += " - Exploitation likelihood is <i>"
+		suffix += " - La probabilidad de explotación es <i>"
 		if initialRisks {
-			suffix += highestExploitationLikelihood(risksStr).Title() + "</i> with <i>" + highestExploitationImpact(risksStr).Title() + "</i> impact."
+			suffix += highestExploitationLikelihood(risksStr).Title() + "</i> con impacto <i>" + highestExploitationImpact(risksStr).Title() + "</i>."
 		} else {
-			suffix += highestExploitationLikelihood(remainingRisks).Title() + "</i> with <i>" + highestExploitationImpact(remainingRisks).Title() + "</i> impact."
+			suffix += highestExploitationLikelihood(remainingRisks).Title() + "</i> con impacto <i>" + highestExploitationImpact(remainingRisks).Title() + "</i>."
 		}
 		strBuilder.WriteString(suffix + "<br>")
 		html.Write(5, strBuilder.String())
@@ -1902,7 +1932,7 @@ func firstParagraph(text string) string {
 
 func (r *pdfReporter) createAssignmentByFunction(parsedModel *types.Model) {
 	r.pdf.SetTextColor(0, 0, 0)
-	title := "Assignment by Function"
+	title := "Asignación por Función"
 	r.addHeadline(title, false)
 	r.defineLinkTarget("{function-assignment}")
 	r.currentChapterTitleBreadcrumb = title
@@ -1917,19 +1947,19 @@ func (r *pdfReporter) createAssignmentByFunction(parsedModel *types.Model) {
 	countDevelopmentFunction := countRisks(risksDevelopmentFunction)
 	countOperationFunction := countRisks(risksOperationFunction)
 	var intro strings.Builder
-	intro.WriteString("This chapter clusters and assigns the risks by functions which are most likely able to " +
-		"check and mitigate them: " +
-		"In total <b>" + strconv.Itoa(totalRiskCount(parsedModel)) + " potential risks</b> have been identified during the threat modeling process " +
-		"of which <b>" + strconv.Itoa(countBusinessSideFunction) + " should be checked by " + types.BusinessSide.Title() + "</b>, " +
-		"<b>" + strconv.Itoa(countArchitectureFunction) + " should be checked by " + types.Architecture.Title() + "</b>, " +
-		"<b>" + strconv.Itoa(countDevelopmentFunction) + " should be checked by " + types.Development.Title() + "</b>, " +
-		"and <b>" + strconv.Itoa(countOperationFunction) + " should be checked by " + types.Operations.Title() + "</b>.<br>")
+	intro.WriteString("Este capítulo agrupa y asigna los riesgos según las funciones más aptas para " +
+		"verificarlos y mitigarlos: " +
+		"En total se identificaron <b>" + strconv.Itoa(totalRiskCount(parsedModel)) + " riesgos potenciales</b> durante el proceso de modelado de amenazas, " +
+		"de los cuales <b>" + strconv.Itoa(countBusinessSideFunction) + " deberían verificarse por " + types.BusinessSide.Title() + "</b>, " +
+		"<b>" + strconv.Itoa(countArchitectureFunction) + " por " + types.Architecture.Title() + "</b>, " +
+		"<b>" + strconv.Itoa(countDevelopmentFunction) + " por " + types.Development.Title() + "</b>, " +
+		"y <b>" + strconv.Itoa(countOperationFunction) + " por " + types.Operations.Title() + "</b>.<br>")
 	html := r.pdf.HTMLBasicNew()
 	html.Write(5, intro.String())
 	intro.Reset()
 	r.pdf.SetFont("Helvetica", "", fontSizeSmall)
 	r.pdfColorGray()
-	html.Write(5, "Risk finding paragraphs are clickable and link to the corresponding chapter.")
+	html.Write(5, "Los párrafos de hallazgos de riesgo son clickeables y enlazan al capítulo correspondiente.")
 	r.pdf.SetFont("Helvetica", "", fontSizeBody)
 
 	oldLeft, _, _, _ := r.pdf.GetMargins()
@@ -2048,7 +2078,7 @@ func (r *pdfReporter) createAssignmentByFunction(parsedModel *types.Model) {
 
 func (r *pdfReporter) createSTRIDE(parsedModel *types.Model) {
 	r.pdf.SetTextColor(0, 0, 0)
-	title := "STRIDE Classification of Identified Risks"
+	title := "Clasificación STRIDE de Riesgos Identificados"
 	r.addHeadline(title, false)
 	r.defineLinkTarget("{stride}")
 	r.currentChapterTitleBreadcrumb = title
@@ -2067,20 +2097,20 @@ func (r *pdfReporter) createSTRIDE(parsedModel *types.Model) {
 	countSTRIDEDenialOfService := countRisks(risksSTRIDEDenialOfService)
 	countSTRIDEElevationOfPrivilege := countRisks(risksSTRIDEElevationOfPrivilege)
 	var intro strings.Builder
-	intro.WriteString("This chapter clusters and classifies the risks by STRIDE categories: " +
-		"In total <b>" + strconv.Itoa(totalRiskCount(parsedModel)) + " potential risks</b> have been identified during the threat modeling process " +
-		"of which <b>" + strconv.Itoa(countSTRIDESpoofing) + " in the " + types.Spoofing.Title() + "</b> category, " +
-		"<b>" + strconv.Itoa(countSTRIDETampering) + " in the " + types.Tampering.Title() + "</b> category, " +
-		"<b>" + strconv.Itoa(countSTRIDERepudiation) + " in the " + types.Repudiation.Title() + "</b> category, " +
-		"<b>" + strconv.Itoa(countSTRIDEInformationDisclosure) + " in the " + types.InformationDisclosure.Title() + "</b> category, " +
-		"<b>" + strconv.Itoa(countSTRIDEDenialOfService) + " in the " + types.DenialOfService.Title() + "</b> category, " +
-		"and <b>" + strconv.Itoa(countSTRIDEElevationOfPrivilege) + " in the " + types.ElevationOfPrivilege.Title() + "</b> category.<br>")
+	intro.WriteString("Este capítulo agrupa y clasifica los riesgos por categorías STRIDE: " +
+		"En total se identificaron <b>" + strconv.Itoa(totalRiskCount(parsedModel)) + " riesgos potenciales</b> durante el proceso de modelado de amenazas, " +
+		"de los cuales <b>" + strconv.Itoa(countSTRIDESpoofing) + " en la categoría " + types.Spoofing.Title() + "</b>, " +
+		"<b>" + strconv.Itoa(countSTRIDETampering) + " en " + types.Tampering.Title() + "</b>, " +
+		"<b>" + strconv.Itoa(countSTRIDERepudiation) + " en " + types.Repudiation.Title() + "</b>, " +
+		"<b>" + strconv.Itoa(countSTRIDEInformationDisclosure) + " en " + types.InformationDisclosure.Title() + "</b>, " +
+		"<b>" + strconv.Itoa(countSTRIDEDenialOfService) + " en " + types.DenialOfService.Title() + "</b>, " +
+		"y <b>" + strconv.Itoa(countSTRIDEElevationOfPrivilege) + " en " + types.ElevationOfPrivilege.Title() + "</b>.<br>")
 	html := r.pdf.HTMLBasicNew()
 	html.Write(5, intro.String())
 	intro.Reset()
 	r.pdf.SetFont("Helvetica", "", fontSizeSmall)
 	r.pdfColorGray()
-	html.Write(5, "Risk finding paragraphs are clickable and link to the corresponding chapter.")
+	html.Write(5, "Los párrafos de hallazgos de riesgo son clickeables y enlazan al capítulo correspondiente.")
 	r.pdf.SetFont("Helvetica", "", fontSizeBody)
 
 	oldLeft, _, _, _ := r.pdf.GetMargins()
@@ -2309,13 +2339,13 @@ func keysAsSlice(categories map[string]struct{}) []string {
 func (r *pdfReporter) createSecurityRequirements(parsedModel *types.Model) {
 	uni := r.pdf.UnicodeTranslatorFromDescriptor("")
 	r.pdf.SetTextColor(0, 0, 0)
-	chapTitle := "Security Requirements"
+	chapTitle := "Requisitos de Seguridad"
 	r.addHeadline(chapTitle, false)
 	r.defineLinkTarget("{security-requirements}")
 	r.currentChapterTitleBreadcrumb = chapTitle
 
 	html := r.pdf.HTMLBasicNew()
-	html.Write(5, "This chapter lists the custom security requirements which have been defined for the modeled target.")
+	html.Write(5, "Este capítulo lista los requisitos de seguridad personalizados definidos para el objetivo modelado.")
 	r.pdfColorBlack()
 	for _, title := range sortedKeysOfSecurityRequirements(parsedModel) {
 		description := parsedModel.SecurityRequirements[title]
@@ -2334,8 +2364,8 @@ func (r *pdfReporter) createSecurityRequirements(parsedModel *types.Model) {
 	} else {
 		html.Write(5, "<br><br><br>")
 	}
-	html.Write(5, "<i>This list is not complete and regulatory or law relevant security requirements have to be "+
-		"taken into account as well. Also custom individual security requirements might exist for the project.</i>")
+	html.Write(5, "<i>Esta lista no es completa y los requisitos de seguridad regulatorios o legales también deben "+
+		"tenerse en cuenta. También pueden existir requisitos de seguridad individuales personalizados para el proyecto.</i>")
 }
 
 func sortedKeysOfSecurityRequirements(parsedModel *types.Model) []string {
@@ -2349,13 +2379,13 @@ func sortedKeysOfSecurityRequirements(parsedModel *types.Model) []string {
 
 func (r *pdfReporter) createAbuseCases(parsedModel *types.Model) {
 	r.pdf.SetTextColor(0, 0, 0)
-	chapTitle := "Abuse Cases"
+	chapTitle := "Casos de Abuso"
 	r.addHeadline(chapTitle, false)
 	r.defineLinkTarget("{abuse-cases}")
 	r.currentChapterTitleBreadcrumb = chapTitle
 
 	html := r.pdf.HTMLBasicNew()
-	html.Write(5, "This chapter lists the custom abuse cases which have been defined for the modeled target.")
+	html.Write(5, "Este capítulo lista los casos de abuso personalizados definidos para el objetivo modelado.")
 	r.pdfColorBlack()
 	for _, title := range sortedKeysOfAbuseCases(parsedModel) {
 		description := parsedModel.AbuseCases[title]
@@ -2374,8 +2404,8 @@ func (r *pdfReporter) createAbuseCases(parsedModel *types.Model) {
 	} else {
 		html.Write(5, "<br><br><br>")
 	}
-	html.Write(5, "<i>This list is not complete and regulatory or law relevant abuse cases have to be "+
-		"taken into account as well. Also custom individual abuse cases might exist for the project.</i>")
+	html.Write(5, "<i>Esta lista no es completa y los casos de abuso regulatorios o legales también deben "+
+		"tenerse en cuenta. También pueden existir casos de abuso individuales personalizados para el proyecto.</i>")
 }
 
 func sortedKeysOfAbuseCases(parsedModel *types.Model) []string {
@@ -2390,27 +2420,27 @@ func sortedKeysOfAbuseCases(parsedModel *types.Model) []string {
 func (r *pdfReporter) createQuestions(parsedModel *types.Model) {
 	uni := r.pdf.UnicodeTranslatorFromDescriptor("")
 	r.pdf.SetTextColor(0, 0, 0)
-	questions := "Questions"
+	questions := "Preguntas"
 	count := len(parsedModel.Questions)
 	if count == 1 {
-		questions = "Question"
+		questions = "Pregunta"
 	}
 	if questionsUnanswered(parsedModel) > 0 {
 		colorModelFailure(r.pdf)
 	}
-	chapTitle := "Questions: " + strconv.Itoa(questionsUnanswered(parsedModel)) + " / " + strconv.Itoa(count) + " " + questions
+	chapTitle := "Preguntas: " + strconv.Itoa(questionsUnanswered(parsedModel)) + " / " + strconv.Itoa(count) + " " + questions
 	r.addHeadline(chapTitle, false)
 	r.defineLinkTarget("{questions}")
 	r.currentChapterTitleBreadcrumb = chapTitle
 	r.pdfColorBlack()
 
 	html := r.pdf.HTMLBasicNew()
-	html.Write(5, "This chapter lists custom questions that arose during the threat modeling process.")
+	html.Write(5, "Este capítulo lista las preguntas personalizadas que surgieron durante el proceso de modelado de amenazas.")
 
 	if len(parsedModel.Questions) == 0 {
 		r.pdfColorLightGray()
 		html.Write(5, "<br><br><br>")
-		html.Write(5, "No custom questions arose during the threat modeling process.")
+		html.Write(5, "No surgieron preguntas personalizadas durante el proceso de modelado de amenazas.")
 	}
 	r.pdfColorBlack()
 	for _, question := range sortedKeysOfQuestions(parsedModel) {
@@ -2437,13 +2467,13 @@ func (r *pdfReporter) createQuestions(parsedModel *types.Model) {
 
 func (r *pdfReporter) createTagListing(parsedModel *types.Model) {
 	r.pdf.SetTextColor(0, 0, 0)
-	chapTitle := "Tag Listing"
+	chapTitle := "Listado de Etiquetas"
 	r.addHeadline(chapTitle, false)
 	r.defineLinkTarget("{tag-listing}")
 	r.currentChapterTitleBreadcrumb = chapTitle
 
 	html := r.pdf.HTMLBasicNew()
-	html.Write(5, "This chapter lists what tags are used by which elements.")
+	html.Write(5, "Este capítulo lista qué etiquetas son utilizadas por qué elementos.")
 	r.pdfColorBlack()
 	sorted := parsedModel.TagsAvailable
 	sort.Strings(sorted)
@@ -2533,21 +2563,21 @@ func sortedTechnicalAssetsByTitle(parsedModel *types.Model) []*types.TechnicalAs
 func (r *pdfReporter) createRiskCategories(parsedModel *types.Model) {
 	uni := r.pdf.UnicodeTranslatorFromDescriptor("")
 	// category title
-	title := "Identified Risks by Vulnerability category"
+	title := "Riesgos Identificados por Categoría de Vulnerabilidad"
 	r.pdfColorBlack()
 	r.addHeadline(title, false)
 	r.defineLinkTarget("{intro-risks-by-vulnerability-category}")
 	html := r.pdf.HTMLBasicNew()
 	var text strings.Builder
-	text.WriteString("In total <b>" + strconv.Itoa(totalRiskCount(parsedModel)) + " potential risks</b> have been identified during the threat modeling process " +
-		"of which " +
-		"<b>" + strconv.Itoa(len(filteredBySeverity(parsedModel, types.CriticalSeverity))) + " are rated as critical</b>, " +
-		"<b>" + strconv.Itoa(len(filteredBySeverity(parsedModel, types.HighSeverity))) + " as high</b>, " +
-		"<b>" + strconv.Itoa(len(filteredBySeverity(parsedModel, types.ElevatedSeverity))) + " as elevated</b>, " +
-		"<b>" + strconv.Itoa(len(filteredBySeverity(parsedModel, types.MediumSeverity))) + " as medium</b>, " +
-		"and <b>" + strconv.Itoa(len(filteredBySeverity(parsedModel, types.LowSeverity))) + " as low</b>. " +
-		"<br><br>These risks are distributed across <b>" + strconv.Itoa(len(parsedModel.GeneratedRisksByCategory)) + " vulnerability categories</b>. ")
-	text.WriteString("The following sub-chapters of this section describe each identified risk category.") // TODO more explanation text
+	text.WriteString("En total se identificaron <b>" + strconv.Itoa(totalRiskCount(parsedModel)) + " riesgos potenciales</b> durante el proceso de modelado de amenazas, " +
+		"de los cuales " +
+		"<b>" + strconv.Itoa(len(filteredBySeverity(parsedModel, types.CriticalSeverity))) + " se califican como críticos</b>, " +
+		"<b>" + strconv.Itoa(len(filteredBySeverity(parsedModel, types.HighSeverity))) + " como altos</b>, " +
+		"<b>" + strconv.Itoa(len(filteredBySeverity(parsedModel, types.ElevatedSeverity))) + " como elevados</b>, " +
+		"<b>" + strconv.Itoa(len(filteredBySeverity(parsedModel, types.MediumSeverity))) + " como medios</b>, " +
+		"y <b>" + strconv.Itoa(len(filteredBySeverity(parsedModel, types.LowSeverity))) + " como bajos</b>. " +
+		"<br><br>Estos riesgos se distribuyen en <b>" + strconv.Itoa(len(parsedModel.GeneratedRisksByCategory)) + " categorías de vulnerabilidad</b>. ")
+	text.WriteString("Los siguientes subcapítulos de esta sección describen cada categoría de riesgo identificada.") // TODO more explanation text
 	html.Write(5, text.String())
 	text.Reset()
 	r.currentChapterTitleBreadcrumb = title
@@ -2575,86 +2605,59 @@ func (r *pdfReporter) createRiskCategories(parsedModel *types.Model) {
 
 		// category title
 		countStillAtRisk := len(types.ReduceToOnlyStillAtRisk(risksStr))
-		suffix := strconv.Itoa(countStillAtRisk) + " / " + strconv.Itoa(len(risksStr)) + " Risk"
+		suffix := strconv.Itoa(countStillAtRisk) + " / " + strconv.Itoa(len(risksStr)) + " Riesgo"
 		if len(risksStr) != 1 {
 			suffix += "s"
 		}
 		title := category.Title + ": " + suffix
-		r.addHeadline(uni(title), true)
+		r.addHeadline(title, true)
 		r.pdfColorBlack()
 		r.defineLinkTarget("{" + category.ID + "}")
 		r.currentChapterTitleBreadcrumb = title
 
-		// category details
+		// category details (compact: description + impact + mitigation + findings)
 		var text strings.Builder
 		cweLink := "n/a"
 		if category.CWE > 0 {
 			cweLink = "<a href=\"https://cwe.mitre.org/data/definitions/" + strconv.Itoa(category.CWE) + ".html\">CWE " +
 				strconv.Itoa(category.CWE) + "</a>"
 		}
-		text.WriteString("<b>Description</b> (" + category.STRIDE.Title() + "): " + cweLink + "<br><br>")
-		text.WriteString(category.Description)
-		text.WriteString("<br><br><br><b>Impact</b><br><br>")
-		text.WriteString(category.Impact)
-		text.WriteString("<br><br><br><b>Detection Logic</b><br><br>")
-		text.WriteString(category.DetectionLogic)
-		text.WriteString("<br><br><br><b>Risk Rating</b><br><br>")
-		text.WriteString(category.RiskAssessment)
-		html.Write(5, text.String())
-		text.Reset()
-		colorRiskStatusFalsePositive(r.pdf)
-		text.WriteString("<br><br><br><b>False Positives</b><br><br>")
-		text.WriteString(category.FalsePositives)
+		text.WriteString("<b>Descripción</b> (" + category.STRIDE.Title() + "): " + cweLink + "<br><br>")
+		text.WriteString(firstParagraph(category.Description))
+		text.WriteString("<br><br><b>Impacto</b><br><br>")
+		text.WriteString(firstParagraph(category.Impact))
 		html.Write(5, text.String())
 		text.Reset()
 		colorRiskStatusMitigated(r.pdf)
-		text.WriteString("<br><br><br><b>Mitigation</b> (" + category.Function.Title() + "): " + category.Action + "<br><br>")
-		text.WriteString(category.Mitigation)
-
-		asvsChapter := category.ASVS
-		if len(asvsChapter) == 0 {
-			text.WriteString("<br><br>ASVS Chapter: n/a")
-		} else {
-			text.WriteString("<br><br>ASVS Chapter: <a href=\"https://owasp.org/www-project-application-security-verification-standard/\">" + asvsChapter + "</a>")
+		text.WriteString("<br><br><b>Mitigación</b> (" + category.Function.Title() + "): " + category.Action + "<br><br>")
+		text.WriteString(firstParagraph(category.Mitigation))
+		if len(category.ASVS) > 0 {
+			text.WriteString("<br><br>ASVS: <a href=\"https://owasp.org/www-project-application-security-verification-standard/\">" + category.ASVS + "</a>")
 		}
-
-		cheatSheetLink := category.CheatSheet
-		if len(cheatSheetLink) == 0 {
-			cheatSheetLink = "n/a"
-		} else {
-			lastLinkParts := strings.Split(cheatSheetLink, "/")
-			linkText := lastLinkParts[len(lastLinkParts)-1]
-			if strings.HasSuffix(linkText, ".html") || strings.HasSuffix(linkText, ".htm") {
-				var extension = filepath.Ext(linkText)
-				linkText = linkText[0 : len(linkText)-len(extension)]
-			}
-			cheatSheetLink = "<a href=\"" + cheatSheetLink + "\">" + linkText + "</a>"
-		}
-		text.WriteString("<br>Cheat Sheet: " + cheatSheetLink)
-
-		text.WriteString("<br><br><br><b>Check</b><br><br>")
-		text.WriteString(category.Check)
-
 		html.Write(5, text.String())
 		text.Reset()
 		r.pdf.SetTextColor(0, 0, 0)
 
 		// risk details
-		r.pageBreak()
-		r.pdf.SetY(36)
-		text.WriteString("<b>Risk Findings</b><br><br>")
-		times := strconv.Itoa(len(risksStr)) + " time"
-		if len(risksStr) > 1 {
-			times += "s"
+		if r.pdf.GetY() > 200 {
+			r.pageBreak()
+			r.pdf.SetY(36)
+		} else {
+			r.pdf.Ln(4)
 		}
-		text.WriteString("The risk <b>" + category.Title + "</b> was found <b>" + times + "</b> in the analyzed architecture to be " +
-			"potentially possible. Each spot should be checked individually by reviewing the implementation whether all " +
-			"controls have been applied properly in order to mitigate each risk.<br>")
+		text.WriteString("<b>Hallazgos de Riesgo</b><br><br>")
+		times := strconv.Itoa(len(risksStr)) + " vez"
+		if len(risksStr) > 1 {
+			times = strconv.Itoa(len(risksStr)) + " veces"
+		}
+		text.WriteString("El riesgo <b>" + category.Title + "</b> se encontró <b>" + times + "</b> en la arquitectura analizada como " +
+			"potencialmente posible. Cada hallazgo debería verificarse individualmente revisando la implementación para comprobar si todos " +
+			"los controles se aplicaron correctamente a fin de mitigar cada riesgo.<br>")
 		html.Write(5, text.String())
 		text.Reset()
 		r.pdf.SetFont("Helvetica", "", fontSizeSmall)
 		r.pdfColorGray()
-		html.Write(5, "Risk finding paragraphs are clickable and link to the corresponding chapter.<br>")
+		html.Write(5, "Los párrafos de hallazgos de riesgo son clickeables y enlazan al capítulo correspondiente.<br>")
 		r.pdf.SetFont("Helvetica", "", fontSizeBody)
 		oldLeft, _, _, _ := r.pdf.GetMargins()
 		headlineCriticalWritten, headlineHighWritten, headlineElevatedWritten, headlineMediumWritten, headlineLowWritten := false, false, false, false, false
@@ -2672,7 +2675,7 @@ func (r *pdfReporter) createRiskCategories(parsedModel *types.Model) {
 				if !headlineCriticalWritten {
 					r.pdf.SetFont("Helvetica", "", fontSizeBody)
 					r.pdf.SetLeftMargin(oldLeft)
-					text.WriteString("<br><b><i>Critical Risk Severity</i></b><br><br>")
+					text.WriteString("<br><b><i>Severidad de Riesgo Crítica</i></b><br><br>")
 					html.Write(5, text.String())
 					text.Reset()
 					headlineCriticalWritten = true
@@ -2682,7 +2685,7 @@ func (r *pdfReporter) createRiskCategories(parsedModel *types.Model) {
 				if !headlineHighWritten {
 					r.pdf.SetFont("Helvetica", "", fontSizeBody)
 					r.pdf.SetLeftMargin(oldLeft)
-					text.WriteString("<br><b><i>High Risk Severity</i></b><br><br>")
+					text.WriteString("<br><b><i>Severidad de Riesgo Alta</i></b><br><br>")
 					html.Write(5, text.String())
 					text.Reset()
 					headlineHighWritten = true
@@ -2692,7 +2695,7 @@ func (r *pdfReporter) createRiskCategories(parsedModel *types.Model) {
 				if !headlineElevatedWritten {
 					r.pdf.SetFont("Helvetica", "", fontSizeBody)
 					r.pdf.SetLeftMargin(oldLeft)
-					text.WriteString("<br><b><i>Elevated Risk Severity</i></b><br><br>")
+					text.WriteString("<br><b><i>Severidad de Riesgo Elevada</i></b><br><br>")
 					html.Write(5, text.String())
 					text.Reset()
 					headlineElevatedWritten = true
@@ -2702,7 +2705,7 @@ func (r *pdfReporter) createRiskCategories(parsedModel *types.Model) {
 				if !headlineMediumWritten {
 					r.pdf.SetFont("Helvetica", "", fontSizeBody)
 					r.pdf.SetLeftMargin(oldLeft)
-					text.WriteString("<br><b><i>Medium Risk Severity</i></b><br><br>")
+					text.WriteString("<br><b><i>Severidad de Riesgo Media</i></b><br><br>")
 					html.Write(5, text.String())
 					text.Reset()
 					headlineMediumWritten = true
@@ -2712,7 +2715,7 @@ func (r *pdfReporter) createRiskCategories(parsedModel *types.Model) {
 				if !headlineLowWritten {
 					r.pdf.SetFont("Helvetica", "", fontSizeBody)
 					r.pdf.SetLeftMargin(oldLeft)
-					text.WriteString("<br><b><i>Low Risk Severity</i></b><br><br>")
+					text.WriteString("<br><b><i>Severidad de Riesgo Baja</i></b><br><br>")
 					html.Write(5, text.String())
 					text.Reset()
 					headlineLowWritten = true
@@ -2726,7 +2729,7 @@ func (r *pdfReporter) createRiskCategories(parsedModel *types.Model) {
 			posY := r.pdf.GetY()
 			r.pdf.SetLeftMargin(oldLeft + 10)
 			r.pdf.SetFont("Helvetica", "", fontSizeBody)
-			text.WriteString(uni(risk.Title) + ": Exploitation likelihood is <i>" + risk.ExploitationLikelihood.Title() + "</i> with <i>" + risk.ExploitationImpact.Title() + "</i> impact.")
+			text.WriteString(uni(risk.Title) + ": La probabilidad de explotación es <i>" + risk.ExploitationLikelihood.Title() + "</i> con impacto <i>" + risk.ExploitationImpact.Title() + "</i>.")
 			text.WriteString("<br>")
 			html.Write(5, text.String())
 			text.Reset()
@@ -2800,35 +2803,35 @@ func (r *pdfReporter) writeRiskTrackingStatus(parsedModel *types.Model, risk *ty
 func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 	uni := r.pdf.UnicodeTranslatorFromDescriptor("")
 	// category title
-	title := "Identified Risks by Technical Asset"
+	title := "Riesgos Identificados por Activo Técnico"
 	r.pdfColorBlack()
 	r.addHeadline(title, false)
 	r.defineLinkTarget("{intro-risks-by-technical-asset}")
 	html := r.pdf.HTMLBasicNew()
 	var text strings.Builder
-	text.WriteString("In total <b>" + strconv.Itoa(totalRiskCount(parsedModel)) + " potential risks</b> have been identified during the threat modeling process " +
-		"of which " +
-		"<b>" + strconv.Itoa(len(filteredBySeverity(parsedModel, types.CriticalSeverity))) + " are rated as critical</b>, " +
-		"<b>" + strconv.Itoa(len(filteredBySeverity(parsedModel, types.HighSeverity))) + " as high</b>, " +
-		"<b>" + strconv.Itoa(len(filteredBySeverity(parsedModel, types.ElevatedSeverity))) + " as elevated</b>, " +
-		"<b>" + strconv.Itoa(len(filteredBySeverity(parsedModel, types.MediumSeverity))) + " as medium</b>, " +
-		"and <b>" + strconv.Itoa(len(filteredBySeverity(parsedModel, types.LowSeverity))) + " as low</b>. " +
-		"<br><br>These risks are distributed across <b>" + strconv.Itoa(len(parsedModel.InScopeTechnicalAssets())) + " in-scope technical assets</b>. ")
-	text.WriteString("The following sub-chapters of this section describe each identified risk grouped by technical asset. ") // TODO more explanation text
-	text.WriteString("The RAA value of a technical asset is the calculated \"Relative Attacker Attractiveness\" value in percent.")
+	text.WriteString("En total se identificaron <b>" + strconv.Itoa(totalRiskCount(parsedModel)) + " riesgos potenciales</b> durante el proceso de modelado de amenazas, " +
+		"de los cuales " +
+		"<b>" + strconv.Itoa(len(filteredBySeverity(parsedModel, types.CriticalSeverity))) + " se califican como críticos</b>, " +
+		"<b>" + strconv.Itoa(len(filteredBySeverity(parsedModel, types.HighSeverity))) + " como altos</b>, " +
+		"<b>" + strconv.Itoa(len(filteredBySeverity(parsedModel, types.ElevatedSeverity))) + " como elevados</b>, " +
+		"<b>" + strconv.Itoa(len(filteredBySeverity(parsedModel, types.MediumSeverity))) + " como medios</b>, " +
+		"y <b>" + strconv.Itoa(len(filteredBySeverity(parsedModel, types.LowSeverity))) + " como bajos</b>. " +
+		"<br><br>Estos riesgos se distribuyen en <b>" + strconv.Itoa(len(parsedModel.InScopeTechnicalAssets())) + " activos técnicos en alcance</b>. ")
+	text.WriteString("Los siguientes subcapítulos de esta sección describen cada riesgo identificado agrupado por activo técnico. ") // TODO more explanation text
+	text.WriteString("El valor RAA de un activo técnico es el valor calculado de \"Atractivo Relativo para el Atacante\" en porcentaje.")
 	html.Write(5, text.String())
 	text.Reset()
 	r.currentChapterTitleBreadcrumb = title
 	for _, technicalAsset := range sortedTechnicalAssetsByRiskSeverityAndTitle(parsedModel) {
 		risksStr := parsedModel.GeneratedRisks(technicalAsset)
 		countStillAtRisk := len(types.ReduceToOnlyStillAtRisk(risksStr))
-		suffix := strconv.Itoa(countStillAtRisk) + " / " + strconv.Itoa(len(risksStr)) + " Risk"
+		suffix := strconv.Itoa(countStillAtRisk) + " / " + strconv.Itoa(len(risksStr)) + " Riesgo"
 		if len(risksStr) != 1 {
 			suffix += "s"
 		}
 		if technicalAsset.OutOfScope {
 			r.pdfColorOutOfScope()
-			suffix = "out-of-scope"
+			suffix = "fuera de alcance"
 		} else {
 			switch types.HighestSeverityStillAtRisk(risksStr) {
 			case types.CriticalSeverity:
@@ -2851,7 +2854,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 
 		// asset title
 		title := technicalAsset.Title + ": " + suffix
-		r.addHeadline(uni(title), true)
+		r.addHeadline(title, true)
 		r.pdfColorBlack()
 		r.defineLinkTarget("{" + technicalAsset.Id + "}")
 		r.currentChapterTitleBreadcrumb = title
@@ -2859,7 +2862,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 		// asset description
 		html := r.pdf.HTMLBasicNew()
 		var text strings.Builder
-		text.WriteString("<b>Description</b><br><br>")
+		text.WriteString("<b>Descripción</b><br><br>")
 		text.WriteString(uni(technicalAsset.Description))
 		html.Write(5, text.String())
 		text.Reset()
@@ -2875,12 +2878,12 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 		}
 		r.pdf.SetFont("Helvetica", "B", fontSizeBody)
 		r.pdfColorBlack()
-		r.pdf.CellFormat(190, 6, "Identified Risks of Asset", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(190, 6, "Riesgos Identificados del Activo", "0", 0, "", false, 0, "")
 		r.pdfColorGray()
 		oldLeft, _, _, _ := r.pdf.GetMargins()
 		if len(risksStr) > 0 {
 			r.pdf.SetFont("Helvetica", "", fontSizeSmall)
-			html.Write(5, "Risk finding paragraphs are clickable and link to the corresponding chapter.")
+			html.Write(5, "Los párrafos de hallazgos de riesgo son clickeables y enlazan al capítulo correspondiente.")
 			r.pdf.SetFont("Helvetica", "", fontSizeBody)
 			r.pdf.SetLeftMargin(15)
 			/*
@@ -2888,7 +2891,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 				r.pdf.Ln(-1)
 				r.pdfColorGray()
 				r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-				r.pdf.CellFormat(185, 6, strconv.Itoa(len(risksStr))+" risksStr in total were identified", "0", 0, "", false, 0, "")
+				r.pdf.CellFormat(185, 6, strconv.Itoa(len(risksStr))+" riesgos identificados en total", "0", 0, "", false, 0, "")
 			*/
 			headlineCriticalWritten, headlineHighWritten, headlineElevatedWritten, headlineMediumWritten, headlineLowWritten := false, false, false, false, false
 			r.pdf.Ln(-1)
@@ -2906,7 +2909,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 					if !headlineCriticalWritten {
 						r.pdf.SetFont("Helvetica", "", fontSizeBody)
 						r.pdf.SetLeftMargin(oldLeft + 3)
-						html.Write(5, "<br><b><i>Critical Risk Severity</i></b><br><br>")
+						html.Write(5, "<br><b><i>Severidad de Riesgo Crítica</i></b><br><br>")
 						headlineCriticalWritten = true
 					}
 				case types.HighSeverity:
@@ -2914,7 +2917,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 					if !headlineHighWritten {
 						r.pdf.SetFont("Helvetica", "", fontSizeBody)
 						r.pdf.SetLeftMargin(oldLeft + 3)
-						html.Write(5, "<br><b><i>High Risk Severity</i></b><br><br>")
+						html.Write(5, "<br><b><i>Severidad de Riesgo Alta</i></b><br><br>")
 						headlineHighWritten = true
 					}
 				case types.ElevatedSeverity:
@@ -2922,7 +2925,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 					if !headlineElevatedWritten {
 						r.pdf.SetFont("Helvetica", "", fontSizeBody)
 						r.pdf.SetLeftMargin(oldLeft + 3)
-						html.Write(5, "<br><b><i>Elevated Risk Severity</i></b><br><br>")
+						html.Write(5, "<br><b><i>Severidad de Riesgo Elevada</i></b><br><br>")
 						headlineElevatedWritten = true
 					}
 				case types.MediumSeverity:
@@ -2930,7 +2933,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 					if !headlineMediumWritten {
 						r.pdf.SetFont("Helvetica", "", fontSizeBody)
 						r.pdf.SetLeftMargin(oldLeft + 3)
-						html.Write(5, "<br><b><i>Medium Risk Severity</i></b><br><br>")
+						html.Write(5, "<br><b><i>Severidad de Riesgo Media</i></b><br><br>")
 						headlineMediumWritten = true
 					}
 				case types.LowSeverity:
@@ -2938,7 +2941,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 					if !headlineLowWritten {
 						r.pdf.SetFont("Helvetica", "", fontSizeBody)
 						r.pdf.SetLeftMargin(oldLeft + 3)
-						html.Write(5, "<br><b><i>Low Risk Severity</i></b><br><br>")
+						html.Write(5, "<br><b><i>Severidad de Riesgo Baja</i></b><br><br>")
 						headlineLowWritten = true
 					}
 				default:
@@ -2950,7 +2953,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 				posY := r.pdf.GetY()
 				r.pdf.SetLeftMargin(oldLeft + 10)
 				r.pdf.SetFont("Helvetica", "", fontSizeBody)
-				text.WriteString(uni(risk.Title) + ": Exploitation likelihood is <i>" + risk.ExploitationLikelihood.Title() + "</i> with <i>" + risk.ExploitationImpact.Title() + "</i> impact.")
+				text.WriteString(uni(risk.Title) + ": La probabilidad de explotación es <i>" + risk.ExploitationLikelihood.Title() + "</i> con impacto <i>" + risk.ExploitationImpact.Title() + "</i>.")
 				text.WriteString("<br>")
 				html.Write(5, text.String())
 				text.Reset()
@@ -2969,9 +2972,9 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 			r.pdfColorGray()
 			r.pdf.SetFont("Helvetica", "", fontSizeBody)
 			r.pdf.SetLeftMargin(15)
-			text := "No risksStr were identified."
+			text := "No se identificaron riesgos."
 			if technicalAsset.OutOfScope {
-				text = "Asset was defined as out-of-scope."
+				text = "El activo fue definido como fuera de alcance."
 			}
 			html.Write(5, text)
 			r.pdf.Ln(-1)
@@ -2986,7 +2989,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorBlack()
 		r.pdf.SetFont("Helvetica", "B", fontSizeBody)
-		r.pdf.CellFormat(190, 6, "Asset Information", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(190, 6, "Información del Activo", "0", 0, "", false, 0, "")
 		r.pdf.Ln(-1)
 		r.pdf.Ln(-1)
 		r.pdf.SetFont("Helvetica", "", fontSizeBody)
@@ -3001,7 +3004,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Type:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Tipo:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(145, 6, technicalAsset.Type.String(), "0", "0", false)
 		if r.pdf.GetY() > 270 {
@@ -3010,7 +3013,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Usage:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Uso:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(145, 6, technicalAsset.Usage.String(), "0", "0", false)
 		if r.pdf.GetY() > 270 {
@@ -3024,7 +3027,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 		textRAA := fmt.Sprintf("%.0f", technicalAsset.RAA) + " %"
 		if technicalAsset.OutOfScope {
 			r.pdfColorGray()
-			textRAA = "out-of-scope"
+			textRAA = "fuera de alcance"
 		}
 		r.pdf.MultiCell(145, 6, textRAA, "0", "0", false)
 		r.pdfColorBlack()
@@ -3034,7 +3037,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Size:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Tamaño:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(145, 6, technicalAsset.Size.String(), "0", "0", false)
 		if r.pdf.GetY() > 270 {
@@ -3043,7 +3046,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Technology:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Tecnología:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(145, 6, technicalAsset.Technologies.String(), "0", "0", false)
 		if r.pdf.GetY() > 270 {
@@ -3052,7 +3055,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Tags:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Etiquetas:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		tagsUsedText := ""
 		sorted := technicalAsset.Tags
@@ -3083,7 +3086,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Machine:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Máquina:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(145, 6, technicalAsset.Machine.String(), "0", "0", false)
 		if r.pdf.GetY() > 270 {
@@ -3092,7 +3095,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Encryption:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Cifrado:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(145, 6, technicalAsset.Encryption.String(), "0", "0", false)
 		if r.pdf.GetY() > 270 {
@@ -3101,7 +3104,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Multi-Tenant:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Multi-Inquilino:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(145, 6, strconv.FormatBool(technicalAsset.MultiTenant), "0", "0", false)
 		if r.pdf.GetY() > 270 {
@@ -3110,7 +3113,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Redundant:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Redundante:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(145, 6, strconv.FormatBool(technicalAsset.Redundant), "0", "0", false)
 		if r.pdf.GetY() > 270 {
@@ -3119,7 +3122,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Custom-Developed:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Desarrollo a Medida:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(145, 6, strconv.FormatBool(technicalAsset.CustomDevelopedParts), "0", "0", false)
 		if r.pdf.GetY() > 270 {
@@ -3128,12 +3131,12 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Client by Human:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Cliente Humano:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(145, 6, strconv.FormatBool(technicalAsset.UsedAsClientByHuman), "0", "0", false)
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Data Processed:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Datos Procesados:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		dataAssetsProcessedText := ""
 		for _, dataAsset := range parsedModel.DataAssetsProcessedSorted(technicalAsset) {
@@ -3144,13 +3147,13 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 		}
 		if len(dataAssetsProcessedText) == 0 {
 			r.pdfColorGray()
-			dataAssetsProcessedText = "none"
+			dataAssetsProcessedText = "ninguno"
 		}
 		r.pdf.MultiCell(145, 6, uni(dataAssetsProcessedText), "0", "0", false)
 
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Data Stored:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Datos Almacenados:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		dataAssetsStoredText := ""
 		for _, dataAsset := range parsedModel.DataAssetsStoredSorted(technicalAsset) {
@@ -3161,7 +3164,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 		}
 		if len(dataAssetsStoredText) == 0 {
 			r.pdfColorGray()
-			dataAssetsStoredText = "none"
+			dataAssetsStoredText = "ninguno"
 		}
 		r.pdf.MultiCell(145, 6, uni(dataAssetsStoredText), "0", "0", false)
 
@@ -3190,13 +3193,13 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorBlack()
 		r.pdf.SetFont("Helvetica", "B", fontSizeBody)
-		r.pdf.CellFormat(190, 6, "Asset Rating", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(190, 6, "Calificación del Activo", "0", 0, "", false, 0, "")
 		r.pdf.Ln(-1)
 		r.pdf.Ln(-1)
 		r.pdf.SetFont("Helvetica", "", fontSizeBody)
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Owner:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Propietario:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(145, 6, uni(technicalAsset.Owner), "0", "0", false)
 		if r.pdf.GetY() > 270 {
@@ -3205,7 +3208,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Confidentiality:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Confidencialidad:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.CellFormat(40, 6, technicalAsset.Confidentiality.String(), "0", 0, "", false, 0, "")
 		r.pdfColorGray()
@@ -3218,7 +3221,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Integrity:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Integridad:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.CellFormat(40, 6, technicalAsset.Integrity.String(), "0", 0, "", false, 0, "")
 		r.pdfColorGray()
@@ -3231,7 +3234,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Availability:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Disponibilidad:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.CellFormat(40, 6, technicalAsset.Availability.String(), "0", 0, "", false, 0, "")
 		r.pdfColorGray()
@@ -3244,7 +3247,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "CIA-Justification:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Justificación CIA:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(145, 6, uni(technicalAsset.JustificationCiaRating), "0", "0", false)
 
@@ -3257,7 +3260,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 			}
 			r.pdfColorBlack()
 			r.pdf.SetFont("Helvetica", "B", fontSizeBody)
-			r.pdf.CellFormat(190, 6, "Asset Out-of-Scope Justification", "0", 0, "", false, 0, "")
+			r.pdf.CellFormat(190, 6, "Justificación de Fuera de Alcance del Activo", "0", 0, "", false, 0, "")
 			r.pdf.Ln(-1)
 			r.pdf.Ln(-1)
 			r.pdf.SetFont("Helvetica", "", fontSizeBody)
@@ -3274,10 +3277,10 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 			}
 			r.pdfColorBlack()
 			r.pdf.SetFont("Helvetica", "B", fontSizeBody)
-			r.pdf.CellFormat(190, 6, "Outgoing Communication Links: "+strconv.Itoa(len(technicalAsset.CommunicationLinks)), "0", 0, "", false, 0, "")
+			r.pdf.CellFormat(190, 6, "Enlaces de Comunicación Salientes: "+strconv.Itoa(len(technicalAsset.CommunicationLinks)), "0", 0, "", false, 0, "")
 			r.pdf.SetFont("Helvetica", "", fontSizeSmall)
 			r.pdfColorGray()
-			html.Write(5, "Target technical asset names are clickable and link to the corresponding chapter.")
+			html.Write(5, "Los nombres de activos técnicos destino son clickeables y enlazan al capítulo correspondiente.")
 			r.pdf.SetFont("Helvetica", "", fontSizeBody)
 			r.pdf.Ln(-1)
 			r.pdf.Ln(-1)
@@ -3301,7 +3304,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 				r.pdf.Ln(-1)
 				r.pdfColorGray()
 				r.pdf.CellFormat(15, 6, "", "0", 0, "", false, 0, "")
-				r.pdf.CellFormat(35, 6, "Target:", "0", 0, "", false, 0, "")
+				r.pdf.CellFormat(35, 6, "Destino:", "0", 0, "", false, 0, "")
 				r.pdfColorBlack()
 				r.pdf.MultiCell(125, 6, uni(parsedModel.TechnicalAssets[outgoingCommLink.TargetId].Title), "0", "0", false)
 				r.pdf.Link(60, r.pdf.GetY()-5, 70, 5, r.tocLinkIdByAssetId[outgoingCommLink.TargetId])
@@ -3311,7 +3314,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 				}
 				r.pdfColorGray()
 				r.pdf.CellFormat(15, 6, "", "0", 0, "", false, 0, "")
-				r.pdf.CellFormat(35, 6, "Protocol:", "0", 0, "", false, 0, "")
+				r.pdf.CellFormat(35, 6, "Protocolo:", "0", 0, "", false, 0, "")
 				r.pdfColorBlack()
 				r.pdf.MultiCell(140, 6, outgoingCommLink.Protocol.String(), "0", "0", false)
 				if r.pdf.GetY() > 270 {
@@ -3320,7 +3323,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 				}
 				r.pdfColorGray()
 				r.pdf.CellFormat(15, 6, "", "0", 0, "", false, 0, "")
-				r.pdf.CellFormat(35, 6, "Encrypted:", "0", 0, "", false, 0, "")
+				r.pdf.CellFormat(35, 6, "Cifrado:", "0", 0, "", false, 0, "")
 				r.pdfColorBlack()
 				r.pdf.MultiCell(140, 6, strconv.FormatBool(outgoingCommLink.Protocol.IsEncrypted()), "0", "0", false)
 				if r.pdf.GetY() > 270 {
@@ -3329,7 +3332,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 				}
 				r.pdfColorGray()
 				r.pdf.CellFormat(15, 6, "", "0", 0, "", false, 0, "")
-				r.pdf.CellFormat(35, 6, "Authentication:", "0", 0, "", false, 0, "")
+				r.pdf.CellFormat(35, 6, "Autenticación:", "0", 0, "", false, 0, "")
 				r.pdfColorBlack()
 				r.pdf.MultiCell(140, 6, outgoingCommLink.Authentication.String(), "0", "0", false)
 				if r.pdf.GetY() > 270 {
@@ -3338,7 +3341,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 				}
 				r.pdfColorGray()
 				r.pdf.CellFormat(15, 6, "", "0", 0, "", false, 0, "")
-				r.pdf.CellFormat(35, 6, "Authorization:", "0", 0, "", false, 0, "")
+				r.pdf.CellFormat(35, 6, "Autorización:", "0", 0, "", false, 0, "")
 				r.pdfColorBlack()
 				r.pdf.MultiCell(140, 6, outgoingCommLink.Authorization.String(), "0", "0", false)
 				if r.pdf.GetY() > 270 {
@@ -3356,7 +3359,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 				}
 				r.pdfColorGray()
 				r.pdf.CellFormat(15, 6, "", "0", 0, "", false, 0, "")
-				r.pdf.CellFormat(35, 6, "Usage:", "0", 0, "", false, 0, "")
+				r.pdf.CellFormat(35, 6, "Uso:", "0", 0, "", false, 0, "")
 				r.pdfColorBlack()
 				r.pdf.MultiCell(140, 6, outgoingCommLink.Usage.String(), "0", "0", false)
 				if r.pdf.GetY() > 270 {
@@ -3365,7 +3368,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 				}
 				r.pdfColorGray()
 				r.pdf.CellFormat(15, 6, "", "0", 0, "", false, 0, "")
-				r.pdf.CellFormat(35, 6, "Tags:", "0", 0, "", false, 0, "")
+				r.pdf.CellFormat(35, 6, "Etiquetas:", "0", 0, "", false, 0, "")
 				r.pdfColorBlack()
 				tagsUsedText := ""
 				sorted := outgoingCommLink.Tags
@@ -3401,7 +3404,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 				r.pdf.MultiCell(140, 6, strconv.FormatBool(outgoingCommLink.IpFiltered), "0", "0", false)
 				r.pdfColorGray()
 				r.pdf.CellFormat(15, 6, "", "0", 0, "", false, 0, "")
-				r.pdf.CellFormat(35, 6, "Data Sent:", "0", 0, "", false, 0, "")
+				r.pdf.CellFormat(35, 6, "Datos Enviados:", "0", 0, "", false, 0, "")
 				r.pdfColorBlack()
 				dataAssetsSentText := ""
 				for _, dataAsset := range parsedModel.DataAssetsSentSorted(outgoingCommLink) {
@@ -3412,12 +3415,12 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 				}
 				if len(dataAssetsSentText) == 0 {
 					r.pdfColorGray()
-					dataAssetsSentText = "none"
+					dataAssetsSentText = "ninguno"
 				}
 				r.pdf.MultiCell(140, 6, uni(dataAssetsSentText), "0", "0", false)
 				r.pdfColorGray()
 				r.pdf.CellFormat(15, 6, "", "0", 0, "", false, 0, "")
-				r.pdf.CellFormat(35, 6, "Data Received:", "0", 0, "", false, 0, "")
+				r.pdf.CellFormat(35, 6, "Datos Recibidos:", "0", 0, "", false, 0, "")
 				r.pdfColorBlack()
 				dataAssetsReceivedText := ""
 				for _, dataAsset := range parsedModel.DataAssetsReceivedSorted(outgoingCommLink) {
@@ -3428,7 +3431,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 				}
 				if len(dataAssetsReceivedText) == 0 {
 					r.pdfColorGray()
-					dataAssetsReceivedText = "none"
+					dataAssetsReceivedText = "ninguno"
 				}
 				r.pdf.MultiCell(140, 6, uni(dataAssetsReceivedText), "0", "0", false)
 				r.pdf.Ln(-1)
@@ -3444,10 +3447,10 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 			}
 			r.pdfColorBlack()
 			r.pdf.SetFont("Helvetica", "B", fontSizeBody)
-			r.pdf.CellFormat(190, 6, "Incoming Communication Links: "+strconv.Itoa(len(incomingCommLinks)), "0", 0, "", false, 0, "")
+			r.pdf.CellFormat(190, 6, "Enlaces de Comunicación Entrantes: "+strconv.Itoa(len(incomingCommLinks)), "0", 0, "", false, 0, "")
 			r.pdf.SetFont("Helvetica", "", fontSizeSmall)
 			r.pdfColorGray()
-			html.Write(5, "Source technical asset names are clickable and link to the corresponding chapter.")
+			html.Write(5, "Los nombres de activos técnicos origen son clickeables y enlazan al capítulo correspondiente.")
 			r.pdf.SetFont("Helvetica", "", fontSizeBody)
 			r.pdf.Ln(-1)
 			r.pdf.Ln(-1)
@@ -3471,7 +3474,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 				r.pdf.Ln(-1)
 				r.pdfColorGray()
 				r.pdf.CellFormat(15, 6, "", "0", 0, "", false, 0, "")
-				r.pdf.CellFormat(35, 6, "Source:", "0", 0, "", false, 0, "")
+				r.pdf.CellFormat(35, 6, "Origen:", "0", 0, "", false, 0, "")
 				r.pdfColorBlack()
 				r.pdf.MultiCell(140, 6, uni(parsedModel.TechnicalAssets[incomingCommLink.SourceId].Title), "0", "0", false)
 				r.pdf.Link(60, r.pdf.GetY()-5, 70, 5, r.tocLinkIdByAssetId[incomingCommLink.SourceId])
@@ -3481,7 +3484,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 				}
 				r.pdfColorGray()
 				r.pdf.CellFormat(15, 6, "", "0", 0, "", false, 0, "")
-				r.pdf.CellFormat(35, 6, "Protocol:", "0", 0, "", false, 0, "")
+				r.pdf.CellFormat(35, 6, "Protocolo:", "0", 0, "", false, 0, "")
 				r.pdfColorBlack()
 				r.pdf.MultiCell(140, 6, incomingCommLink.Protocol.String(), "0", "0", false)
 				if r.pdf.GetY() > 270 {
@@ -3490,7 +3493,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 				}
 				r.pdfColorGray()
 				r.pdf.CellFormat(15, 6, "", "0", 0, "", false, 0, "")
-				r.pdf.CellFormat(35, 6, "Encrypted:", "0", 0, "", false, 0, "")
+				r.pdf.CellFormat(35, 6, "Cifrado:", "0", 0, "", false, 0, "")
 				r.pdfColorBlack()
 				r.pdf.MultiCell(140, 6, strconv.FormatBool(incomingCommLink.Protocol.IsEncrypted()), "0", "0", false)
 				if r.pdf.GetY() > 270 {
@@ -3499,7 +3502,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 				}
 				r.pdfColorGray()
 				r.pdf.CellFormat(15, 6, "", "0", 0, "", false, 0, "")
-				r.pdf.CellFormat(35, 6, "Authentication:", "0", 0, "", false, 0, "")
+				r.pdf.CellFormat(35, 6, "Autenticación:", "0", 0, "", false, 0, "")
 				r.pdfColorBlack()
 				r.pdf.MultiCell(140, 6, incomingCommLink.Authentication.String(), "0", "0", false)
 				if r.pdf.GetY() > 270 {
@@ -3508,7 +3511,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 				}
 				r.pdfColorGray()
 				r.pdf.CellFormat(15, 6, "", "0", 0, "", false, 0, "")
-				r.pdf.CellFormat(35, 6, "Authorization:", "0", 0, "", false, 0, "")
+				r.pdf.CellFormat(35, 6, "Autorización:", "0", 0, "", false, 0, "")
 				r.pdfColorBlack()
 				r.pdf.MultiCell(140, 6, incomingCommLink.Authorization.String(), "0", "0", false)
 				if r.pdf.GetY() > 270 {
@@ -3526,7 +3529,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 				}
 				r.pdfColorGray()
 				r.pdf.CellFormat(15, 6, "", "0", 0, "", false, 0, "")
-				r.pdf.CellFormat(35, 6, "Usage:", "0", 0, "", false, 0, "")
+				r.pdf.CellFormat(35, 6, "Uso:", "0", 0, "", false, 0, "")
 				r.pdfColorBlack()
 				r.pdf.MultiCell(140, 6, incomingCommLink.Usage.String(), "0", "0", false)
 				if r.pdf.GetY() > 270 {
@@ -3535,7 +3538,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 				}
 				r.pdfColorGray()
 				r.pdf.CellFormat(15, 6, "", "0", 0, "", false, 0, "")
-				r.pdf.CellFormat(35, 6, "Tags:", "0", 0, "", false, 0, "")
+				r.pdf.CellFormat(35, 6, "Etiquetas:", "0", 0, "", false, 0, "")
 				r.pdfColorBlack()
 				tagsUsedText := ""
 				sorted := incomingCommLink.Tags
@@ -3571,7 +3574,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 				r.pdf.MultiCell(140, 6, strconv.FormatBool(incomingCommLink.IpFiltered), "0", "0", false)
 				r.pdfColorGray()
 				r.pdf.CellFormat(15, 6, "", "0", 0, "", false, 0, "")
-				r.pdf.CellFormat(35, 6, "Data Received:", "0", 0, "", false, 0, "")
+				r.pdf.CellFormat(35, 6, "Datos Recibidos:", "0", 0, "", false, 0, "")
 				r.pdfColorBlack()
 				dataAssetsSentText := ""
 				// yep, here we reverse the sent/received direction, as it's the incoming stuff
@@ -3583,12 +3586,12 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 				}
 				if len(dataAssetsSentText) == 0 {
 					r.pdfColorGray()
-					dataAssetsSentText = "none"
+					dataAssetsSentText = "ninguno"
 				}
 				r.pdf.MultiCell(140, 6, uni(dataAssetsSentText), "0", "0", false)
 				r.pdfColorGray()
 				r.pdf.CellFormat(15, 6, "", "0", 0, "", false, 0, "")
-				r.pdf.CellFormat(35, 6, "Data Sent:", "0", 0, "", false, 0, "")
+				r.pdf.CellFormat(35, 6, "Datos Enviados:", "0", 0, "", false, 0, "")
 				r.pdfColorBlack()
 				dataAssetsReceivedText := ""
 				// yep, here we reverse the sent/received direction, as it's the incoming stuff
@@ -3600,7 +3603,7 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 				}
 				if len(dataAssetsReceivedText) == 0 {
 					r.pdfColorGray()
-					dataAssetsReceivedText = "none"
+					dataAssetsReceivedText = "ninguno"
 				}
 				r.pdf.MultiCell(140, 6, uni(dataAssetsReceivedText), "0", "0", false)
 				r.pdf.Ln(-1)
@@ -3611,23 +3614,23 @@ func (r *pdfReporter) createTechnicalAssets(parsedModel *types.Model) {
 
 func (r *pdfReporter) createDataAssets(parsedModel *types.Model) {
 	uni := r.pdf.UnicodeTranslatorFromDescriptor("")
-	title := "Identified Data Breach Probabilities by Data Asset"
+	title := "Probabilidades de Brecha Identificadas por Activo de Datos"
 	r.pdfColorBlack()
 	r.addHeadline(title, false)
 	r.defineLinkTarget("{intro-risks-by-data-asset}")
 	html := r.pdf.HTMLBasicNew()
-	html.Write(5, "In total <b>"+strconv.Itoa(totalRiskCount(parsedModel))+" potential risks</b> have been identified during the threat modeling process "+
-		"of which "+
-		"<b>"+strconv.Itoa(len(filteredBySeverity(parsedModel, types.CriticalSeverity)))+" are rated as critical</b>, "+
-		"<b>"+strconv.Itoa(len(filteredBySeverity(parsedModel, types.HighSeverity)))+" as high</b>, "+
-		"<b>"+strconv.Itoa(len(filteredBySeverity(parsedModel, types.ElevatedSeverity)))+" as elevated</b>, "+
-		"<b>"+strconv.Itoa(len(filteredBySeverity(parsedModel, types.MediumSeverity)))+" as medium</b>, "+
-		"and <b>"+strconv.Itoa(len(filteredBySeverity(parsedModel, types.LowSeverity)))+" as low</b>. "+
-		"<br><br>These risks are distributed across <b>"+strconv.Itoa(len(parsedModel.DataAssets))+" data assets</b>. ")
-	html.Write(5, "The following sub-chapters of this section describe the derived data breach probabilities grouped by data asset.<br>") // TODO more explanation text
+	html.Write(5, "En total se identificaron <b>"+strconv.Itoa(totalRiskCount(parsedModel))+" riesgos potenciales</b> durante el proceso de modelado de amenazas, "+
+		"de los cuales "+
+		"<b>"+strconv.Itoa(len(filteredBySeverity(parsedModel, types.CriticalSeverity)))+" se califican como críticos</b>, "+
+		"<b>"+strconv.Itoa(len(filteredBySeverity(parsedModel, types.HighSeverity)))+" como altos</b>, "+
+		"<b>"+strconv.Itoa(len(filteredBySeverity(parsedModel, types.ElevatedSeverity)))+" como elevados</b>, "+
+		"<b>"+strconv.Itoa(len(filteredBySeverity(parsedModel, types.MediumSeverity)))+" como medios</b>, "+
+		"y <b>"+strconv.Itoa(len(filteredBySeverity(parsedModel, types.LowSeverity)))+" como bajos</b>. "+
+		"<br><br>Estos riesgos se distribuyen en <b>"+strconv.Itoa(len(parsedModel.DataAssets))+" activos de datos</b>. ")
+	html.Write(5, "Los siguientes subcapítulos de esta sección describen las probabilidades de brecha de datos derivadas, agrupadas por activo de datos.<br>") // TODO more explanation text
 	r.pdf.SetFont("Helvetica", "", fontSizeSmall)
 	r.pdfColorGray()
-	html.Write(5, "Technical asset names and risk IDs are clickable and link to the corresponding chapter.")
+	html.Write(5, "Los nombres de activos técnicos y los IDs de riesgo son clickeables y enlazan al capítulo correspondiente.")
 	r.pdf.SetFont("Helvetica", "", fontSizeBody)
 	r.currentChapterTitleBreadcrumb = title
 	for _, dataAsset := range sortedDataAssetsByDataBreachProbabilityAndTitle(parsedModel) {
@@ -3653,7 +3656,7 @@ func (r *pdfReporter) createDataAssets(parsedModel *types.Model) {
 		}
 		risksStr := parsedModel.IdentifiedDataBreachProbabilityRisks(dataAsset)
 		countStillAtRisk := len(types.ReduceToOnlyStillAtRisk(risksStr))
-		suffix := strconv.Itoa(countStillAtRisk) + " / " + strconv.Itoa(len(risksStr)) + " Risk"
+		suffix := strconv.Itoa(countStillAtRisk) + " / " + strconv.Itoa(len(risksStr)) + " Riesgo"
 		if len(risksStr) != 1 {
 			suffix += "s"
 		}
@@ -3676,7 +3679,7 @@ func (r *pdfReporter) createDataAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Usage:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Uso:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(145, 6, dataAsset.Usage.String(), "0", "0", false)
 		if r.pdf.GetY() > 265 {
@@ -3685,7 +3688,7 @@ func (r *pdfReporter) createDataAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Quantity:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Cantidad:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(145, 6, dataAsset.Quantity.String(), "0", "0", false)
 		if r.pdf.GetY() > 265 {
@@ -3694,7 +3697,7 @@ func (r *pdfReporter) createDataAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Tags:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Etiquetas:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		tagsUsedText := ""
 		sorted := dataAsset.Tags
@@ -3716,7 +3719,7 @@ func (r *pdfReporter) createDataAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Origin:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Origen:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(145, 6, uni(dataAsset.Origin), "0", "0", false)
 		if r.pdf.GetY() > 265 {
@@ -3725,7 +3728,7 @@ func (r *pdfReporter) createDataAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Owner:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Propietario:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(145, 6, uni(dataAsset.Owner), "0", "0", false)
 		if r.pdf.GetY() > 265 {
@@ -3734,7 +3737,7 @@ func (r *pdfReporter) createDataAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Confidentiality:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Confidencialidad:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.CellFormat(40, 6, dataAsset.Confidentiality.String(), "0", 0, "", false, 0, "")
 		r.pdfColorGray()
@@ -3747,7 +3750,7 @@ func (r *pdfReporter) createDataAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Integrity:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Integridad:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.CellFormat(40, 6, dataAsset.Integrity.String(), "0", 0, "", false, 0, "")
 		r.pdfColorGray()
@@ -3760,7 +3763,7 @@ func (r *pdfReporter) createDataAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Availability:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Disponibilidad:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.CellFormat(40, 6, dataAsset.Availability.String(), "0", 0, "", false, 0, "")
 		r.pdfColorGray()
@@ -3773,7 +3776,7 @@ func (r *pdfReporter) createDataAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "CIA-Justification:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Justificación CIA:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(145, 6, uni(dataAsset.JustificationCiaRating), "0", "0", false)
 
@@ -3783,7 +3786,7 @@ func (r *pdfReporter) createDataAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Processed by:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Procesado por:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		processedByText := ""
 		for _, dataAsset := range parsedModel.ProcessedByTechnicalAssetsSorted(dataAsset) {
@@ -3794,7 +3797,7 @@ func (r *pdfReporter) createDataAssets(parsedModel *types.Model) {
 		}
 		if len(processedByText) == 0 {
 			r.pdfColorGray()
-			processedByText = "none"
+			processedByText = "ninguno"
 		}
 		r.pdf.MultiCell(145, 6, uni(processedByText), "0", "0", false)
 
@@ -3804,7 +3807,7 @@ func (r *pdfReporter) createDataAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Stored by:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Almacenado por:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		storedByText := ""
 		for _, dataAsset := range parsedModel.StoredByTechnicalAssetsSorted(dataAsset) {
@@ -3815,7 +3818,7 @@ func (r *pdfReporter) createDataAssets(parsedModel *types.Model) {
 		}
 		if len(storedByText) == 0 {
 			r.pdfColorGray()
-			storedByText = "none"
+			storedByText = "ninguno"
 		}
 		r.pdf.MultiCell(145, 6, uni(storedByText), "0", "0", false)
 
@@ -3825,7 +3828,7 @@ func (r *pdfReporter) createDataAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Sent via:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Enviado vía:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		sentViaText := ""
 		for _, commLink := range parsedModel.SentViaCommLinksSorted(dataAsset) {
@@ -3836,7 +3839,7 @@ func (r *pdfReporter) createDataAssets(parsedModel *types.Model) {
 		}
 		if len(sentViaText) == 0 {
 			r.pdfColorGray()
-			sentViaText = "none"
+			sentViaText = "ninguno"
 		}
 		r.pdf.MultiCell(145, 6, uni(sentViaText), "0", "0", false)
 
@@ -3846,7 +3849,7 @@ func (r *pdfReporter) createDataAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Received via:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Recibido vía:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		receivedViaText := ""
 		for _, commLink := range parsedModel.ReceivedViaCommLinksSorted(dataAsset) {
@@ -3857,13 +3860,13 @@ func (r *pdfReporter) createDataAssets(parsedModel *types.Model) {
 		}
 		if len(receivedViaText) == 0 {
 			r.pdfColorGray()
-			receivedViaText = "none"
+			receivedViaText = "ninguno"
 		}
 		r.pdf.MultiCell(145, 6, uni(receivedViaText), "0", "0", false)
 
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Data Breach:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Brecha de Datos:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.SetFont("Helvetica", "B", fontSizeBody)
 		dataBreachProbability := identifiedDataBreachProbabilityStillAtRisk(parsedModel, dataAsset)
@@ -3880,7 +3883,7 @@ func (r *pdfReporter) createDataAssets(parsedModel *types.Model) {
 		}
 		if !isDataBreachPotentialStillAtRisk(parsedModel, dataAsset) {
 			r.pdfColorBlack()
-			riskText = "none"
+			riskText = "ninguno"
 		}
 		r.pdf.MultiCell(145, 6, riskText, "0", "0", false)
 		r.pdf.SetFont("Helvetica", "", fontSizeBody)
@@ -3898,17 +3901,17 @@ func (r *pdfReporter) createDataAssets(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Data Breach Risks:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Riesgos de Brecha de Datos:", "0", 0, "", false, 0, "")
 		if len(dataBreachRisksStillAtRisk) == 0 {
 			r.pdfColorGray()
-			r.pdf.MultiCell(145, 6, "This data asset has no data breach potential.", "0", "0", false)
+			r.pdf.MultiCell(145, 6, "Este activo de datos no tiene potencial de brecha.", "0", "0", false)
 		} else {
 			r.pdfColorBlack()
 			riskRemainingStr := "risksStr"
 			if countStillAtRisk == 1 {
 				riskRemainingStr = "risk"
 			}
-			r.pdf.MultiCell(145, 6, "This data asset has data breach potential because of "+
+			r.pdf.MultiCell(145, 6, "Este activo de datos tiene potencial de brecha debido a "+
 				""+strconv.Itoa(countStillAtRisk)+" remaining "+riskRemainingStr+":", "0", "0", false)
 			for _, dataBreachRisk := range dataBreachRisksStillAtRisk {
 				if r.pdf.GetY() > 280 { // 280 as only small font here
@@ -3982,17 +3985,13 @@ func isDataBreachPotentialStillAtRisk(parsedModel *types.Model, dataAsset *types
 
 func (r *pdfReporter) createTrustBoundaries(parsedModel *types.Model) {
 	uni := r.pdf.UnicodeTranslatorFromDescriptor("")
-	title := "Trust Boundaries"
+	title := "Límites de Confianza"
 	r.pdfColorBlack()
 	r.addHeadline(title, false)
 
 	html := r.pdf.HTMLBasicNew()
-	word := "has"
-	if len(parsedModel.TrustBoundaries) > 1 {
-		word = "have"
-	}
-	html.Write(5, "In total <b>"+strconv.Itoa(len(parsedModel.TrustBoundaries))+" trust boundaries</b> "+word+" been "+
-		"modeled during the threat modeling process.")
+	html.Write(5, "En total se modelaron <b>"+strconv.Itoa(len(parsedModel.TrustBoundaries))+" límites de confianza</b> "+
+		"durante el proceso de modelado de amenazas.")
 	r.currentChapterTitleBreadcrumb = title
 	for _, trustBoundary := range sortedTrustBoundariesByTitle(parsedModel) {
 		if r.pdf.GetY() > 250 {
@@ -4024,7 +4023,7 @@ func (r *pdfReporter) createTrustBoundaries(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Type:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Tipo:", "0", 0, "", false, 0, "")
 		colorTwilight(r.pdf)
 		if !trustBoundary.Type.IsNetworkBoundary() {
 			r.pdfColorLightGray()
@@ -4038,7 +4037,7 @@ func (r *pdfReporter) createTrustBoundaries(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Tags:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Etiquetas:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		tagsUsedText := ""
 		sorted := trustBoundary.Tags
@@ -4061,7 +4060,7 @@ func (r *pdfReporter) createTrustBoundaries(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Assets inside:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Activos internos:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		assetsInsideText := ""
 		for _, assetKey := range trustBoundary.TechnicalAssetsInside {
@@ -4072,7 +4071,7 @@ func (r *pdfReporter) createTrustBoundaries(parsedModel *types.Model) {
 		}
 		if len(assetsInsideText) == 0 {
 			r.pdfColorGray()
-			assetsInsideText = "none"
+			assetsInsideText = "ninguno"
 		}
 		r.pdf.MultiCell(145, 6, uni(assetsInsideText), "0", "0", false)
 
@@ -4111,17 +4110,17 @@ func questionsUnanswered(parsedModel *types.Model) int {
 
 func (r *pdfReporter) createSharedRuntimes(parsedModel *types.Model) {
 	uni := r.pdf.UnicodeTranslatorFromDescriptor("")
-	title := "Shared Runtimes"
+	title := "Entornos de Ejecución Compartidos"
 	r.pdfColorBlack()
 	r.addHeadline(title, false)
 
 	html := r.pdf.HTMLBasicNew()
-	word, runtime := "has", "runtime"
+	runtimeLabel := "entorno compartido"
 	if len(parsedModel.SharedRuntimes) > 1 {
-		word, runtime = "have", "runtimes"
+		runtimeLabel = "entornos compartidos"
 	}
-	html.Write(5, "In total <b>"+strconv.Itoa(len(parsedModel.SharedRuntimes))+" shared "+runtime+"</b> "+word+" been "+
-		"modeled during the threat modeling process.")
+	html.Write(5, "En total se modelaron <b>"+strconv.Itoa(len(parsedModel.SharedRuntimes))+" "+runtimeLabel+"</b> "+
+		"durante el proceso de modelado de amenazas.")
 	r.currentChapterTitleBreadcrumb = title
 	for _, sharedRuntime := range sortedSharedRuntimesByTitle(parsedModel) {
 		r.pdfColorBlack()
@@ -4150,7 +4149,7 @@ func (r *pdfReporter) createSharedRuntimes(parsedModel *types.Model) {
 		}
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(40, 6, "Tags:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(40, 6, "Etiquetas:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		tagsUsedText := ""
 		sorted := sharedRuntime.Tags
@@ -4184,7 +4183,7 @@ func (r *pdfReporter) createSharedRuntimes(parsedModel *types.Model) {
 		}
 		if len(assetsInsideText) == 0 {
 			r.pdfColorGray()
-			assetsInsideText = "none"
+			assetsInsideText = "ninguno"
 		}
 		r.pdf.MultiCell(145, 6, uni(assetsInsideText), "0", "0", false)
 	}
@@ -4192,7 +4191,7 @@ func (r *pdfReporter) createSharedRuntimes(parsedModel *types.Model) {
 
 func (r *pdfReporter) createRiskRulesChecked(parsedModel *types.Model, modelFilename string, skipRiskRules []string, buildTimestamp string, threagileVersion string, modelHash string, customRiskRules types.RiskRules) {
 	r.pdf.SetTextColor(0, 0, 0)
-	title := "Risk Rules Checked by Threagile"
+	title := "Reglas de Riesgo Verificadas por Threagile"
 	r.addHeadline(title, false)
 	r.defineLinkTarget("{risk-rules-checked}")
 	r.currentChapterTitleBreadcrumb = title
@@ -4211,10 +4210,10 @@ func (r *pdfReporter) createRiskRulesChecked(parsedModel *types.Model, modelFile
 	strBuilder.Reset()
 	r.pdfColorBlack()
 	r.pdf.SetFont("Helvetica", "", fontSizeBody)
-	strBuilder.WriteString("<br><br>Threagile (see <a href=\"https://threagile.io\">https://threagile.io</a> for more details) is an open-source toolkit for agile threat modeling, created by Christian Schneider (<a href=\"https://christian-schneider.net\">https://christian-schneider.net</a>): It allows to model an architecture with its assets in an agile fashion as a YAML file " +
-		"directly inside the IDE. Upon execution of the Threagile toolkit all standard risk rules (as well as individual custom rules if present) " +
-		"are checked against the architecture model. At the time the Threagile toolkit was executed on the model input file " +
-		"the following risk rules were checked:")
+	strBuilder.WriteString("<br><br>Threagile (ver <a href=\"https://threagile.io\">https://threagile.io</a> para más detalles) es un toolkit de código abierto para modelado ágil de amenazas, creado por Christian Schneider (<a href=\"https://christian-schneider.net\">https://christian-schneider.net</a>): permite modelar una arquitectura con sus activos de forma ágil como un archivo YAML " +
+		"directamente dentro del IDE. Al ejecutar el toolkit Threagile, todas las reglas de riesgo estándar (así como reglas personalizadas individuales si existen) " +
+		"se verifican contra el modelo de arquitectura. En el momento en que el toolkit Threagile se ejecutó sobre el archivo de modelo de entrada " +
+		"se verificaron las siguientes reglas de riesgo:")
 	html.Write(5, strBuilder.String())
 	strBuilder.Reset()
 
@@ -4236,7 +4235,7 @@ func (r *pdfReporter) createRiskRulesChecked(parsedModel *types.Model, modelFile
 		r.pdf.CellFormat(190, 6, id, "0", 0, "", false, 0, "")
 		r.pdf.Ln(-1)
 		r.pdf.SetFont("Helvetica", "I", fontSizeBody)
-		r.pdf.CellFormat(190, 6, "Custom Risk Rule", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(190, 6, "Regla de Riesgo Personalizada", "0", 0, "", false, 0, "")
 		r.pdf.Ln(-1)
 		r.pdf.SetFont("Helvetica", "", fontSizeBody)
 		r.pdfColorGray()
@@ -4246,17 +4245,17 @@ func (r *pdfReporter) createRiskRulesChecked(parsedModel *types.Model, modelFile
 		r.pdf.MultiCell(160, 6, customRule.Category().STRIDE.Title(), "0", "0", false)
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(25, 6, "Description:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(25, 6, "Descripción:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(160, 6, firstParagraph(customRule.Category().Description), "0", "0", false)
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(25, 6, "Detection:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(25, 6, "Detección:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(160, 6, customRule.Category().DetectionLogic, "0", "0", false)
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(25, 6, "Rating:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(25, 6, "Calificación:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(160, 6, customRule.Category().RiskAssessment, "0", "0", false)
 	}
@@ -4271,7 +4270,7 @@ func (r *pdfReporter) createRiskRulesChecked(parsedModel *types.Model, modelFile
 		r.pdf.CellFormat(190, 6, individualRiskCategory.ID, "0", 0, "", false, 0, "")
 		r.pdf.Ln(-1)
 		r.pdf.SetFont("Helvetica", "I", fontSizeBody)
-		r.pdf.CellFormat(190, 6, "Individual Risk category", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(190, 6, "Categoría de Riesgo Individual", "0", 0, "", false, 0, "")
 		r.pdf.Ln(-1)
 		r.pdf.SetFont("Helvetica", "", fontSizeBody)
 		r.pdfColorGray()
@@ -4281,17 +4280,17 @@ func (r *pdfReporter) createRiskRulesChecked(parsedModel *types.Model, modelFile
 		r.pdf.MultiCell(160, 6, individualRiskCategory.STRIDE.Title(), "0", "0", false)
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(25, 6, "Description:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(25, 6, "Descripción:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(160, 6, firstParagraph(individualRiskCategory.Description), "0", "0", false)
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(25, 6, "Detection:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(25, 6, "Detección:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(160, 6, individualRiskCategory.DetectionLogic, "0", "0", false)
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(25, 6, "Rating:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(25, 6, "Calificación:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(160, 6, individualRiskCategory.RiskAssessment, "0", "0", false)
 	}
@@ -4317,17 +4316,17 @@ func (r *pdfReporter) createRiskRulesChecked(parsedModel *types.Model, modelFile
 		r.pdf.MultiCell(160, 6, rule.Category().STRIDE.Title(), "0", "0", false)
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(25, 6, "Description:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(25, 6, "Descripción:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(160, 6, firstParagraph(rule.Category().Description), "0", "0", false)
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(25, 6, "Detection:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(25, 6, "Detección:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(160, 6, rule.Category().DetectionLogic, "0", "0", false)
 		r.pdfColorGray()
 		r.pdf.CellFormat(5, 6, "", "0", 0, "", false, 0, "")
-		r.pdf.CellFormat(25, 6, "Rating:", "0", 0, "", false, 0, "")
+		r.pdf.CellFormat(25, 6, "Calificación:", "0", 0, "", false, 0, "")
 		r.pdfColorBlack()
 		r.pdf.MultiCell(160, 6, rule.Category().RiskAssessment, "0", "0", false)
 	}
@@ -4336,7 +4335,7 @@ func (r *pdfReporter) createRiskRulesChecked(parsedModel *types.Model, modelFile
 func (r *pdfReporter) createTargetDescription(parsedModel *types.Model, baseFolder string) error {
 	uni := r.pdf.UnicodeTranslatorFromDescriptor("")
 	r.pdf.SetTextColor(0, 0, 0)
-	title := "Application Overview"
+	title := "Descripción de la Aplicación"
 	r.addHeadline(title, false)
 	r.defineLinkTarget("{target-overview}")
 	r.currentChapterTitleBreadcrumb = title
@@ -4344,8 +4343,8 @@ func (r *pdfReporter) createTargetDescription(parsedModel *types.Model, baseFold
 	var intro strings.Builder
 	html := r.pdf.HTMLBasicNew()
 
-	intro.WriteString("<b>Business Criticality</b><br><br>")
-	intro.WriteString("The overall business criticality of \"" + uni(parsedModel.Title) + "\" was rated as:<br><br>")
+	intro.WriteString("<b>Criticidad del Negocio</b><br><br>")
+	intro.WriteString("La criticidad general del negocio de \"" + uni(parsedModel.Title) + "\" se calificó como:<br><br>")
 	html.Write(5, intro.String())
 	criticality := parsedModel.BusinessCriticality
 	intro.Reset()
@@ -4415,7 +4414,7 @@ func (r *pdfReporter) createTargetDescription(parsedModel *types.Model, baseFold
 	intro.Reset()
 	r.pdfColorBlack()
 
-	intro.WriteString("<br><br><br><b>Business Overview</b><br><br>")
+	intro.WriteString("<br><br><br><b>Descripción del Negocio</b><br><br>")
 	intro.WriteString(uni(parsedModel.BusinessOverview.Description))
 	html.Write(5, intro.String())
 	intro.Reset()
@@ -4424,7 +4423,7 @@ func (r *pdfReporter) createTargetDescription(parsedModel *types.Model, baseFold
 		return fmt.Errorf("error adding custom images: %w", err)
 	}
 
-	intro.WriteString("<br><br><br><b>Technical Overview</b><br><br>")
+	intro.WriteString("<br><br><br><b>Descripción Técnica</b><br><br>")
 	intro.WriteString(uni(parsedModel.TechnicalOverview.Description))
 	html.Write(5, intro.String())
 	intro.Reset()
@@ -4499,16 +4498,16 @@ func getHeightWhenWidthIsFix(imageFullFilename string, width float64) (float64, 
 
 func (r *pdfReporter) embedDataFlowDiagram(diagramFilenamePNG string, tempFolder string) {
 	r.pdf.SetTextColor(0, 0, 0)
-	title := "Data-Flow Diagram"
+	title := "Diagrama de Flujo de Datos"
 	r.addHeadline(title, false)
 	r.defineLinkTarget("{data-flow-diagram}")
 	r.currentChapterTitleBreadcrumb = title
 
 	var intro strings.Builder
-	intro.WriteString("The following diagram was generated by Threagile based on the model input and gives a high-level " +
-		"overview of the data-flow between technical assets. " +
-		"The RAA value is the calculated <i>Relative Attacker Attractiveness</i> in percent. " +
-		"For a full high-resolution version of this diagram please refer to the PNG image file alongside this report.")
+	intro.WriteString("El siguiente diagrama fue generado por Threagile a partir del modelo de entrada y ofrece una visión de alto nivel " +
+		"del flujo de datos entre activos técnicos. " +
+		"El valor RAA es el <i>Atractivo Relativo para el Atacante</i> calculado en porcentaje. " +
+		"Para una versión completa en alta resolución de este diagrama, consulte el archivo PNG junto a este reporte.")
 
 	html := r.pdf.HTMLBasicNew()
 	html.Write(5, intro.String())
@@ -4587,18 +4586,18 @@ func (r *pdfReporter) embedDataFlowDiagram(diagramFilenamePNG string, tempFolder
 
 func (r *pdfReporter) embedDataRiskMapping(diagramFilenamePNG string, tempFolder string) {
 	r.pdf.SetTextColor(0, 0, 0)
-	title := "Data Mapping"
+	title := "Mapeo de Datos"
 	r.addHeadline(title, false)
 	r.defineLinkTarget("{data-risk-mapping}")
 	r.currentChapterTitleBreadcrumb = title
 
 	var intro strings.Builder
-	intro.WriteString("The following diagram was generated by Threagile based on the model input and gives a high-level " +
-		"distribution of data assets across technical assets. The color matches the identified data breach probability and risk level " +
-		"(see the \"Data Breach Probabilities\" chapter for more details). " +
-		"A solid line stands for <i>data is stored by the asset</i> and a dashed one means " +
-		"<i>data is processed by the asset</i>. For a full high-resolution version of this diagram please refer to the PNG image " +
-		"file alongside this report.")
+	intro.WriteString("El siguiente diagrama fue generado por Threagile a partir del modelo de entrada y ofrece una visión de alto nivel " +
+		"de la distribución de activos de datos entre activos técnicos. El color coincide con la probabilidad de brecha de datos y el nivel de riesgo identificados " +
+		"(ver el capítulo \"Probabilidades de Brecha de Datos\" para más detalles). " +
+		"Una línea sólida indica que <i>los datos son almacenados por el activo</i> y una discontinua que " +
+		"<i>los datos son procesados por el activo</i>. Para una versión completa en alta resolución de este diagrama, consulte el archivo PNG " +
+		"junto a este reporte.")
 
 	html := r.pdf.HTMLBasicNew()
 	html.Write(5, intro.String())
@@ -4669,18 +4668,47 @@ func (r *pdfReporter) writeReportToFile(reportFilename string) error {
 	return nil
 }
 
-func (r *pdfReporter) addHeadline(headline string, small bool) {
-	r.pdf.AddPage()
-	gofpdi.UseImportedTemplate(r.pdf, r.contentTemplateId, 0, 0, 0, 300)
-	fontSize := fontSizeHeadline
-	if small {
-		fontSize = fontSizeHeadlineSmall
+
+func formatSpanishDate(t time.Time) string {
+	months := []string{
+		"enero", "febrero", "marzo", "abril", "mayo", "junio",
+		"julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 	}
-	r.pdf.SetFont("Helvetica", "B", float64(fontSize))
-	r.pdf.Text(11, 40, headline)
-	r.pdf.SetFont("Helvetica", "", fontSizeBody)
-	r.pdf.SetX(17)
-	r.pdf.SetY(46)
+	return strconv.Itoa(t.Day()) + " de " + months[int(t.Month())-1] + " de " + strconv.Itoa(t.Year())
+}
+
+func (r *pdfReporter) tr(s string) string {
+	if r.uni == nil {
+		r.uni = r.pdf.UnicodeTranslatorFromDescriptor("")
+	}
+	return r.uni(s)
+}
+
+func (r *pdfReporter) addHeadline(headline string, small bool) {
+	headline = r.tr(headline)
+	if small {
+		// For sub-sections (individual assets, categories), only break if near bottom
+		if r.pdf.GetY() > 220 {
+			r.pdf.AddPage()
+			gofpdi.UseImportedTemplate(r.pdf, r.contentTemplateId, 0, 0, 0, 300)
+			r.pdf.SetY(40)
+		} else {
+			r.pdf.Ln(8)
+		}
+		r.pdf.SetFont("Helvetica", "B", float64(fontSizeHeadlineSmall))
+		r.pdf.Text(11, r.pdf.GetY(), headline)
+		r.pdf.SetFont("Helvetica", "", fontSizeBody)
+		r.pdf.SetX(17)
+		r.pdf.SetY(r.pdf.GetY() + 6)
+	} else {
+		r.pdf.AddPage()
+		gofpdi.UseImportedTemplate(r.pdf, r.contentTemplateId, 0, 0, 0, 300)
+		r.pdf.SetFont("Helvetica", "B", float64(fontSizeHeadline))
+		r.pdf.Text(11, 40, headline)
+		r.pdf.SetFont("Helvetica", "", fontSizeBody)
+		r.pdf.SetX(17)
+		r.pdf.SetY(46)
+	}
 }
 
 func (r *pdfReporter) pageBreak() {

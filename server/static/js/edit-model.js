@@ -54,7 +54,7 @@ $(document).ready(function() {
                 updateDiagramModel(yamlData);
             } catch (error) {
                 console.error('Error parsing YAML:', error);
-                alert('Failed to parse YAML file.');
+                alert('Error al analizar el archivo YAML.');
             }
         };
         reader.readAsText(file);
@@ -79,7 +79,7 @@ $(document).ready(function() {
       downloadLink.click();
       URL.revokeObjectURL(downloadLink.href);
     } catch (e) {
-      alert('Failed to export diagram.');
+      alert('Error al exportar el diagrama.');
       console.error("Error exporting diagram:", e);
     }
   });
@@ -97,19 +97,19 @@ $(document).ready(function() {
             renderRiskTables(risksByCategory, diagramYaml.risk_tracking);
           } catch (e) {
             console.error("Error analyzing model");
-            alert("Error rendering risk tables");
+            alert("Error al renderizar las tablas de riesgos");
           }
         },
         error: function(jqXHR, textStatus, errorThrown) {
-          $("#riskAnalyzeContent").html("Error happened: <span>" + jqXHR.responseJSON.error + "</span>")
+          $("#riskAnalyzeContent").html("Ocurrió un error: <span>" + jqXHR.responseJSON.error + "</span>")
           console.error("Request failed:", textStatus, errorThrown);
-          alert('Analysis failed');
+          alert('El análisis falló');
         }
       });
 
     } catch (e) {
       console.error("Error analyzing model");
-      alert("Error analyzing model");
+      alert("Error al analizar el modelo");
     }
   });
 
@@ -184,7 +184,7 @@ $(document).ready(function() {
     const hiddenProperties = [];
     const extendableProperties = {
       'communication_links': {
-        addCaption: 'Add communication link'
+        addCaption: 'Agregar enlace de comunicación'
       }
     };
     assetEditor.generateEditor(hiddenProperties, extendableProperties, (key, value, oldValue) => {
@@ -224,17 +224,17 @@ $(document).ready(function() {
     const hiddenProperties = ['data_assets', 'technical_assets',  'trust_boundaries', 'shared_runtimes', 'risk_tracking'];
     const extendableProperties = {
       'questions': {
-        addCaption: 'Add question'
+        addCaption: 'Agregar pregunta'
       },
       'abuse_cases': {
-        addCaption: 'Add abuse case'
+        addCaption: 'Agregar caso de abuso'
 
       },
       'security_requirements': {
-        addCaption: 'Add security requirement'
+        addCaption: 'Agregar requisito de seguridad'
       },
       'individual_risk_categories': {
-        addCaption: 'Add individual risk category'
+        addCaption: 'Agregar categoría de riesgo individual'
       }
     };
     projectEditor.generateEditor(hiddenProperties, extendableProperties);
@@ -242,7 +242,7 @@ $(document).ready(function() {
 
   function showTechnicalAssets(data) {
     const editor = new EditorGenerator(data, schema.properties, $('#technicalAssets'), undefined, generateEnumFields());
-    editor.generateEditorForKeys('technical_assets', 'Add technical asset', (key, value, oldValue) => {
+    editor.generateEditorForKeys('technical_assets', 'Agregar activo técnico', (key, value, oldValue) => {
       console.log('technical_assets changed ' + key + ' from ' + oldValue + ' to ' + value);
       updateDiagramModel(diagramYaml);
     });
@@ -250,7 +250,7 @@ $(document).ready(function() {
 
   function showDataAssetsObjects(data) {
     const editor = new EditorGenerator(data, schema.properties, $('#dataAssets'), undefined, generateEnumFields());
-    editor.generateEditorForObject('data_assets', 'Add data asset', (key, value, oldValue) => {
+    editor.generateEditorForObject('data_assets', 'Agregar activo de datos', (key, value, oldValue) => {
       console.log('data_assets changed ' + key + ' from ' + oldValue + ' to ' + value);
       updateDiagramModel(diagramYaml);
     });
@@ -258,7 +258,7 @@ $(document).ready(function() {
 
   function showRiskTrackingObjects(data) {
     const editor = new EditorGenerator(data, schema.properties, $('#riskTrackingPropertyEditor'), undefined, generateEnumFields());
-    editor.generateEditorForObject('risk_tracking', 'Add risk tracking', (key, value, oldValue) => {
+    editor.generateEditorForObject('risk_tracking', 'Agregar seguimiento de riesgo', (key, value, oldValue) => {
       console.log('risk_tracking changed ' + key + ' from ' + oldValue + ' to ' + value);
       updateDiagramModel(diagramYaml);
     });
@@ -266,7 +266,7 @@ $(document).ready(function() {
 
   function showTrustBoundaries(data) {
     const editor = new EditorGenerator(data, schema.properties, $('#trustBoundaries'), undefined, generateEnumFields());
-    editor.generateEditorForObject('trust_boundaries', 'Add trust boundary', (key, value, oldValue) => {
+    editor.generateEditorForObject('trust_boundaries', 'Agregar límite de confianza', (key, value, oldValue) => {
       console.log('trust_boundaries changed ' + key + ' from ' + oldValue + ' to ' + value);
       updateDiagramModel(diagramYaml);
     });
@@ -274,7 +274,7 @@ $(document).ready(function() {
 
   function showSharedRuntimes(data) {
     const editor = new EditorGenerator(data, schema.properties, $('#sharedRuntimes'), undefined, generateEnumFields());
-    editor.generateEditorForObject('shared_runtimes', 'Add shared runtime', (key, value, oldValue) => {
+    editor.generateEditorForObject('shared_runtimes', 'Agregar entorno compartido', (key, value, oldValue) => {
       console.log('shared_runtimes changed ' + key + ' from ' + oldValue + ' to ' + value);
       updateDiagramModel(diagramYaml);
     });
@@ -312,28 +312,28 @@ $(document).ready(function() {
 
         // Add a caption for the category
         const caption = $("<caption>")
-            .text(`Category: ${category}`)
+            .text(`Categoría: ${category}`)
             .css({ fontWeight: "bold", textAlign: "left", marginBottom: "10px" });
         table.append(caption);
 
         // Add a header row
         const headerRow = $("<tr>").append(
-            $("<th>").text("Synthetic ID"),
-            $("<th>").text("Title"),
-            $("<th>").text("Severity"),
-            $("<th>").text("Likelihood"),
-            $("<th>").text("Impact"),
-            $("<th>").text("Most Relevant Asset"),
-            $("<th>").text("Communication Link"),
-            $("<th>").text("Data Breach Assets"),
-            $("<th>").text("Status")
+            $("<th>").text("ID Sintético"),
+            $("<th>").text("Título"),
+            $("<th>").text("Severidad"),
+            $("<th>").text("Probabilidad"),
+            $("<th>").text("Impacto"),
+            $("<th>").text("Activo Más Relevante"),
+            $("<th>").text("Enlace de Comunicación"),
+            $("<th>").text("Activos con Brecha de Datos"),
+            $("<th>").text("Estado")
         ).css({ backgroundColor: "#f2f2f2", textAlign: "left" });
         table.append(headerRow);
 
         // Add a row for each risk
         risks.forEach(risk => {
           const dataBreachTechnicalAssets = risk.data_breach_technical_assets  || [];
-          const status = riskTracking[risk.synthetic_id] ? riskTracking[risk.synthetic_id].status : "Unchecked";
+          const status = riskTracking[risk.synthetic_id] ? riskTracking[risk.synthetic_id].status : "Sin verificar";
 
           const row = $("<tr>").append(
               $("<td>").text(risk.synthetic_id),

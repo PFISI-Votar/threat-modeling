@@ -12,7 +12,7 @@ class SchemaLoader {
                 return this.schema;
             })
             .fail((jqxhr, textStatus, error) => {
-                alert('Request failed: ' + textStatus + ', ' + error);
+                alert('Error en la solicitud: ' + textStatus + ', ' + error);
             });
     }
 

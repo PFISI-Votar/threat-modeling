@@ -11,6 +11,7 @@ import (
 
 	"github.com/threagile/threagile/pkg/model"
 	"github.com/threagile/threagile/pkg/types"
+	"gopkg.in/yaml.v3"
 )
 
 type GenerateCommands struct {
@@ -38,6 +39,32 @@ func (c *GenerateCommands) Defaults() *GenerateCommands {
 		ReportADOC:          true,
 	}
 	return c
+}
+
+// mergeHideChaptersFromModelYAML reads report_configuration.hide_chapter from the model file
+// so thesis models can control PDF chapter visibility without a separate app config.
+func mergeHideChaptersFromModelYAML(modelFilename string, hideChapters map[ChaptersToShowHide]bool) map[ChaptersToShowHide]bool {
+	if hideChapters == nil {
+		hideChapters = make(map[ChaptersToShowHide]bool)
+	}
+	data, err := os.ReadFile(modelFilename)
+	if err != nil {
+		return hideChapters
+	}
+	var doc struct {
+		ReportConfiguration struct {
+			HideChapter map[string]bool `yaml:"hide_chapter"`
+		} `yaml:"report_configuration"`
+	}
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return hideChapters
+	}
+	for chapter, hide := range doc.ReportConfiguration.HideChapter {
+		if hide {
+			hideChapters[ChaptersToShowHide(chapter)] = true
+		}
+	}
+	return hideChapters
 }
 
 type reportConfigReader interface {
@@ -217,6 +244,7 @@ func Generate(config reportConfigReader, readResult *model.ReadResult, commands 
 		progressReporter.Info("Writing report pdf")
 
 		pdfReporter := newPdfReporter(riskRules)
+		hideChapters := mergeHideChaptersFromModelYAML(config.GetInputFile(), config.GetReportConfigurationHideChapters())
 		err = pdfReporter.WriteReportPDF(filepath.Join(config.GetOutputFolder(), config.GetReportFilename()),
 			filepath.Join(config.GetAppFolder(), config.GetTemplateFilename()),
 			filepath.Join(config.GetOutputFolder(), config.GetDataFlowDiagramFilenamePNG()),
@@ -230,7 +258,7 @@ func Generate(config reportConfigReader, readResult *model.ReadResult, commands 
 			readResult.CustomRiskRules,
 			config.GetTempFolder(),
 			readResult.ParsedModel,
-			config.GetReportConfigurationHideChapters())
+			hideChapters)
 		if err != nil {
 			return err
 		}

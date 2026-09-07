@@ -141,11 +141,11 @@ class EditorGenerator {
 
                     if (extendableProperties[key]) {
                         const extendableContainer = $('<div>').addClass('property-editor-extendable');
-                        const addEntryCaption = extendableProperties[key].addCaption ? extendableProperties[key].addCaption : 'Add entry'
+                        const addEntryCaption = extendableProperties[key].addCaption ? extendableProperties[key].addCaption : 'Agregar entrada'
                         const addButton = $('<button>')
                             .text(addEntryCaption)
                             .on('click', () => {
-                                const newKey = prompt('Enter key for the new entry:');
+                                const newKey = prompt('Ingrese la clave para la nueva entrada:');
                                 if (!newKey) return;
 
                                 if (property.additionalProperties?.type === 'object') {
@@ -328,7 +328,7 @@ class EditorGenerator {
                                 // Fallback for unsupported item types
                                 itemContainer.append(
                                     $('<label>')
-                                        .text('Unsupported item type: ' + (itemSchema.type || 'unknown'))
+                                        .text('Tipo de elemento no soportado: ' + (itemSchema.type || 'desconocido'))
                                         .addClass('property-editor-label')
                                 );
                             }
@@ -339,7 +339,7 @@ class EditorGenerator {
                     };
 
                     const addButton = $('<button>')
-                        .text('Add')
+                        .text('Agregar')
                         .on('click', () => {
                             if (itemSchema.enum) {
                                 arrayItems.push(itemSchema.enum[0]); // Default to the first enum value
@@ -368,7 +368,7 @@ class EditorGenerator {
 
                 default:
                     input = $('<label>')
-                        .text('Unsupported type ' + propertyType)
+                        .text('Tipo no soportado ' + propertyType)
                         .addClass('property-editor-label');
             }
 
@@ -397,7 +397,7 @@ class EditorGenerator {
             const addButton = $('<button>')
                 .text(addCaption)
                 .on('click', () => {
-                    const newKey = prompt('Enter key for the new entry:');
+                    const newKey = prompt('Ingrese la clave para la nueva entrada:');
                     if (!newKey) {
                         return;
                     }
@@ -478,7 +478,7 @@ class EditorGenerator {
             const addButton = $('<button>')
                 .text(addCaption)
                 .on('click', () => {
-                    const newKey = prompt('Enter key for the new entry:');
+                    const newKey = prompt('Ingrese la clave para la nueva entrada:');
                     if (!newKey) return;
 
                     if (property.additionalProperties?.type === 'object') {
